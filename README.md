@@ -4,3 +4,4 @@ Collection of nonorthogonal CI-QMC methods. Currently nonorthogonal truncated CI
 Dependencies:
         - revqcmagic
         - pyblock
+        - pyscf
