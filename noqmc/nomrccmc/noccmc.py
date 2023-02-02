@@ -44,9 +44,6 @@ from pyscf.gto.mole import Mole
 ####CUSTOM IMPORTS
 from calc_util import (
     generate_scf, 
-    number2tensor, 
-    tensor2number,
-    exstr2tensor,
     exstr2number,
 )
 from utilities import (
@@ -90,13 +87,8 @@ class System():
                 np.random.seed(self.params['seed'])
                 self.overlap = None     #shape dim,dim
                 self.initial = None #np.empty shape dim
-                self.E_HF = None
+                self.E_NOCI = None
                 self.index_map = {}
-                #if 'workdir' not in self.params:
-                #        if 'output' in os.listdir():
-                #                shutil.rmtree('output')
-                #        os.mkdir('output')
-                ##        self.params['workdir'] = os.path.join(os.getcwd(), 'output')
                 self.log = Log(filename = os.path.join(self.params['workdir'], 'log.out'))
                 self.log.info(f'Arguments:      {params}')                
 
@@ -115,9 +107,9 @@ class System():
                 self.reference = new_refs       
 
                 HF = scf.RHF(mol).run()
-                self.E_HF = HF.e_tot
+                #self.E_HF = HF.e_tot
                 self.enuc = HF.scf_summary['nuc']
-                self.log.info(f'E_HF = {self.E_HF}')
+                self.log.info(f'Restricted HF energy: {HF.e_tot}')
 
         def initialize_walkers(self, mode: str = 'noci') -> None:
                 r"""Generates the inital walker population on each reference
@@ -137,13 +129,13 @@ class System():
                                                 noci_overlap[i,j], noci_overlap[j,i] = calc_overlap(cws = occ_i, cxs = occ_j, cbs = self.cbs, holo = False)
                         self.noci_eigvals, self.noci_eigvecs = la.eigh(noci_H, b = noci_overlap)
                         
+                        self.E_NOCI = self.noci_eigvals[0]
+                        self.log.info(f'E_NOCI = {self.E_NOCI}')
+
                         indices = [i for i in range(self.params['dim']) if self.index_map_rev[i] in [(j, ((),()), ((),())) for j in range(self.params['nr_scf'])]]
                         self.initial = np.zeros(shape=self.params['dim'], dtype=int)
                         for i in indices:
                                 self.initial[i] = int(self.params['nr_w'] * self.noci_eigvecs[int(i / (self.params['dim'] / self.params['nr_scf'])), 0] / np.sum(abs(self.noci_eigvecs[:,0])))
-                        
-                        #NOTE GET RID:::
-                        #self.initial[0] *= -1
 
                 elif mode == 'ref':
                         nr = int(self.params['nr_w'] / len(self.reference))
@@ -246,15 +238,19 @@ class System():
                 self.overlap = np.load('overlap.npy')
                 self.log.info(f'Hilbert space dimensions: {self.HilbertSpaceDim}')
 
-        def excite(self, sd: SingleDeterminant, ex: Tuple[Sequence[int],Sequence[int]] , dex: Tuple[Sequence[int],Sequence[int]]) -> SingleDeterminant:
+        def excite(self, sd: SingleDeterminant, 
+                   ex: Tuple[Sequence[int],Sequence[int]] , 
+                   dex: Tuple[Sequence[int],Sequence[int]]
+                   ) -> SingleDeterminant:
                 r"""...
 
-                :param sd:  SingleDeterminant object used as reference determinant to create an
-                            excitation space.
+                :param sd:  SingleDeterminant object used as reference 
+                            determinant to create an excitation space.
                 :param ex:  Tuple of Sequences of MOs that  will be excited
 		:param dex: Tuple of Sequences of MOs that will be deexcited
 
-                :returns:   New SingleDeterminant object, with excited coefficient configuration."""
+                :returns:   New SingleDeterminant object, with excited 
+                            coefficient configuration."""
                 new_sd = sd.copy_from(sd, dtype=np.float64)
                 for i, tup in enumerate(zip(ex,dex)):
                         ex_spin, dex_spin = tup[0], tup[1]
@@ -297,13 +293,6 @@ class System():
                 
                 #define self.shape, compute all other cumulative properties as well
 
-        def t2n(self, ex_str) -> int:
-                r"""Uses tensor2number routine to generate a number corresponding to an excitation
-                of the form (scf_sol, ((a_ex),(b_ex)), ((a_dex),(b_dex)))"""
-                ex_lvl = len(flatten(ex_str[1]))
-                n = ex_str[0] * np.sum(self.subspace_partitioning)                
-
-                pass
 
         def initialize(self) -> None:
                 self.initialize_references()
@@ -329,19 +318,13 @@ class Propagator(System):
                 self.S = self.Ss[0] = 0
                 self.curr_it = 0
                 self.n = []
-                self.setup()
-
-        def setup(self):
-                r"""Setup probability density for generation of Cluster sizes"""
-#                #cluster_level = np.min(np.sum(self.reference[0].n_electrons), 2*self.params['theory_level'])
                 self.cluster_level = np.sum(self.reference[0].n_electrons)
-#                #self.p_dens = np.array([1/(2**(i+1)) for i in range(self.cluster_level-1)])
-#                #rest = 1 - np.sum(self.p_dens)
-#                #self.p_dens[-1] *= 2
-    
+
         def generate_s(self) -> int:
-                r"""Determines Cluster size for population dynamics of an excip."""
-                return np.random.choice(a = range(1,self.cluster_level), p = self.p_dens) # TODO fix range
+                r"""Determines Cluster size for population dynamics 
+                of an excip."""
+                return np.random.choice(a = range(1,self.cluster_level), 
+                                        p = self.p_dens) # TODO fix range
 
         def E(self) -> None:
                 r"""Calculates energy estimator at current iteration."""
@@ -357,7 +340,7 @@ class Propagator(System):
                 E_proj /= np.einsum('i,i->', overlap_tmp[index, :], coeffs)
                 self.E_proj[self.curr_it] = E_proj
 
-        def reeval_S(self, A: float = None, c: float = 0.03) -> None:
+        def reeval_S(self, A: float = None, c: float = 0.01) -> None:
                 r"""Updates shift every A-th iteration.
 
                 :param A:
@@ -428,13 +411,7 @@ class Propagator(System):
                                         p_interm = p_coeff_scf[i][1:].copy()
                                         p_interm /= np.linalg.norm(p_interm, ord = 1)
                                         cluster_index = np.random.choice(np.arange(1,self.refdim), p = p_interm, replace=True, size = s) #previously False replace
-                                        #p_clust2 = np.prod(np.array([np.abs(coeffs_scf[i,index]) / nr_excips_compl[i] for index in cluster_index]))
-                                        #pss = np.array([np.abs(coeffs_scf[i,index]) / nr_excips_compl[i] for index in cluster_index])
-                                        #p_clust2 = np.prod(pss)
-                                        
                                         p_clust = np.prod(p_interm[cluster_index-1])
-                                        #p_clust = 1/10
-                                        #print(1/pss,  1 / p_clust, 1/p_clust2)
                                 else:
                                         p_clust = 1
                                         cluster_index = np.array([0])
@@ -476,7 +453,7 @@ class Propagator(System):
                                         ii = self.index_map[cluster.excitation]
 
                                         ###CACHE HAMILTONIAN###
-                                if ii is not None:      #TODO switch for and ifs
+                                if ii is not None:      #TODO threading for for loop
                                         if np.isnan(self.H[ii,j]):
                                                 det_i = self.generate_det(cluster.excitation)
                                                 occ_i = det_i.occupied_coefficients
@@ -488,7 +465,7 @@ class Propagator(System):
                                                                            _sao = self.sao, _hcore = self.hcore)
                                                 overlap_ij, _ = calc_overlap(cws = occ_i, cxs = occ_j, cbs = self.cbs,
                                                                              holo = False, _sao = self.sao)
-                                                H_ij -= self.E_HF * overlap_ij
+                                                H_ij -= self.E_NOCI * overlap_ij
                                                 self.H[ii,j] = H_ij
                                                 self.overlap[ii,j] = overlap_ij
                                         else:
@@ -503,8 +480,7 @@ class Propagator(System):
                                                 H_ij, _, overlap_ij, _ = calc_mat_elem(occ_i = occ_i, occ_j = occ_j, 
                                                                                        cbs = self.cbs, enuc = self.enuc, 
                                                                                        sao = self.sao, hcore = self.hcore,
-                                                                                       E_HF = self.E_HF)
-                                                        #H_ij -= self.E_HF * overlap_ij
+                                                                                       E_NOCI = self.E_NOCI)
                                                 self.H_dict[(cl_nr, j)] = (H_ij, overlap_ij)
                                         else:        
                                                 H_ij, overlap_ij = self.H_dict[(cl_nr, j)]
@@ -515,11 +491,9 @@ class Propagator(System):
                                 b = p_spawn - s_int
                                 s_int += (r < np.abs(b)) * np.sign(b)
                                 sp_coeffs[j] -= s_int
-                                #sp_coeffs[j] -= (r < np.abs(b)) * np.sign(b)
 
                                 if s_int > 5:
-                                        print('s_int > 5:       ', cluster.p, cluster.size, amplitude, the_whole_of_p)
-                                        print('decomp:          ', amplitude, 1/p_sel, 1/p_size, 1/p_clust, 1/p_excit)
+                                        print(f'Bloom detected: {s_int} on determinant {j}')
                 
                 #annihilation
                 self.coeffs[self.curr_it+1, :] = sp_coeffs
@@ -528,25 +502,27 @@ class Propagator(System):
                 print(f'{self.curr_it}. SP_COEFF:        ', self.S, np.linalg.norm(self.coeffs[self.curr_it+1, :] ,ord = 1))
 
         def run(self) -> None:
-                r"""Executes the FCIQMC algorithm.
+                r"""Executes the population dynamics algorithm.
                 """
                 
                 for i in range(self.params['it_nr']):
                         self.Nws[self.curr_it] = sum([int(np.round(np.abs(c))) for c in self.coeffs[self.curr_it, :]])
+                        
                         if i % self.params['A'] == 0 and i > self.params['delay']: 
                                 self.reeval_S()					#reevaluates S to stabilize # walkers
-                        self.Ss[self.curr_it+1] = self.S
                         
+                        self.Ss[self.curr_it+1] = self.S
                         self.population_dynamics()
-                        #print(f'{i}', end='\r')
+                        self.E()
 
-                        self.E() #TODO Fix evaluation of projected energy
                         self.curr_it += 1
+
                 print('Hamiltonian:     ', self.H)
                 print('Overlap:         ', self.overlap)
+                #TODO store stuff in object
 
 def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet, 
-                  enuc: float, sao: np.ndarray, hcore: float, E_HF: float, 
+                  enuc: float, sao: np.ndarray, hcore: float, E_NOCI: float, 
                   overlap_ii: float = None
                   ) -> Sequence[np.ndarray]:
         r"""Outsourced calculation of Hamiltonian and 
@@ -560,11 +536,11 @@ def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet,
                 overlap_ij, overlap_ji = calc_overlap(cws = occ_i, cxs = occ_j, 
                                                         cbs = cbs, holo = False, 
                                                         _sao = sao)
-                H_ij -= E_HF * overlap_ij
-                H_ji -= E_HF * overlap_ji
+                H_ij -= E_NOCI * overlap_ij
+                H_ji -= E_NOCI * overlap_ji
         else:
-                H_ij -= E_HF * overlap_ii
-                H_ji -= E_HF * overlap_ii
+                H_ij -= E_NOCI * overlap_ii
+                H_ji -= E_NOCI * overlap_ii
 
         return [H_ij, H_ji, overlap_ij, overlap_ji]
 
@@ -583,7 +559,8 @@ class Postprocessor(Propagator):
                                 det_j = self.get_det(j)
                                 occ_i = det_i.occupied_coefficients
                                 occ_j = det_j.occupied_coefficients
-                                self.overlap[i,j], self.overlap[j,i] = calc_overlap(cws = occ_i, cxs = occ_j, cbs = self.cbs, holo = False)
+                                self.overlap[i,j], self.overlap[j,i] = calc_overlap(cws = occ_i, cxs = occ_j, 
+                                                                                    cbs = self.cbs, holo = False)
 
         def benchmark(self) -> None:
                 r"""Solves the generalized eigenproblem. We project out the eigenspace 
@@ -594,7 +571,8 @@ class Postprocessor(Propagator):
                         #get index of True -> evaluate H and overlap at those indices
                         indices = np.where(isnan)
                         
-                        pool = multiprocessing.Pool(processes = multiprocessing.cpu_count(), initializer = mute)
+                        pool = multiprocessing.Pool(processes = multiprocessing.cpu_count(), 
+                                                    initializer = mute)
                         processes = {}
                         for i,j in zip(indices[0], indices[1]):
                                 det_i = self.get_det(i)
@@ -602,7 +580,7 @@ class Postprocessor(Propagator):
                                 occ_i = det_i.occupied_coefficients
                                 occ_j = det_j.occupied_coefficients
 
-                                processes[(i,j)] = pool.apply_async(calc_mat_elem, [occ_i, occ_j, self.cbs, self.enuc, self.sao, self.hcore, self.E_HF])
+                                processes[(i,j)] = pool.apply_async(calc_mat_elem, [occ_i, occ_j, self.cbs, self.enuc, self.sao, self.hcore, self.E_NOCI])
 
                         pool.close()
                         pool.join()
@@ -717,7 +695,7 @@ class Postprocessor(Propagator):
                 if benchmark:
                         self.degeneracy_treatment()
                         self.log.info(f'Benchmark:\nEigvals:    {self.eigvals}\nEigvecs:        {self.eigvecs}')
-                        self.log.info(f'Final FCI energy:  {np.min(self.eigvals) + self.E_HF}')
+                        self.log.info(f'Final FCI energy:  {np.min(self.eigvals) + self.E_NOCI}')
                         l = la.expm(-1000 * (self.H - min(self.eigvals) * self.overlap))
                         l2 = np.einsum('ij,j->i', l , self.coeffs[0,:])
                #         self.log.info(f'Imag. Time Prop.:  {l}')
