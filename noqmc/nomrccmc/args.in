@@ -1,0 +1,12 @@
+#arguments file:
+
+mode            noci
+verbosity       1
+seed            69420
+dt              0.001
+nr_w            6000
+A               7
+it_nr           40000
+delay           10000
+theory_level    1
+benchmark       1
