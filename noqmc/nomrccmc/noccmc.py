@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-#---- author: Moritz Baumgarten ----# 
-#Implementation of a nonorthogonal multireference coupled cluster
-#Monte Carlo (NOCCMC) method.
-#The Hilbert space for a common NOMRCI-QMC calculation is generated
-#by a subset of possible exitations of the reference determinats
-#(generally obtained from SCF metadynamics)
-#Based on Booth, Thom and Alavi [2009], and Thom and Head-Gordon [2008]
+"""---- author: Moritz Baumgarten ---- 
+Implementation of a nonorthogonal multireference coupled cluster
+Monte Carlo (NOCCMC) method.
+The Hilbert space for a common NOMRCI-QMC calculation is generated
+by a subset of possible exitations of the reference determinats
+(generally obtained from SCF metadynamics)
+Based on Booth, Thom and Alavi [2009], and Thom and Head-Gordon [2008]"""
 
 import numpy as np
 import scipy.linalg as la
@@ -42,17 +42,21 @@ from pyscf import scf, gto, fci
 from pyscf.gto.mole import Mole
 
 ####CUSTOM IMPORTS
-from calc_util import (
+from noqmc.utils.calc_util import (
     generate_scf, 
     exstr2number,
 )
-from utilities import (
+from noqmc.utils.utilities import (
     Parser, 
     Log, 
     Timer,
 )
 from pyblock import blocking
-from excips import Cluster, Excitor, flatten
+from noqmc.utils.excips import (
+    Cluster, 
+    Excitor, 
+    flatten,
+)    
 
 rc('font', **{'family': 'serif', 'serif': ['Computer Modern'], 'size': 13})
 rc('text', usetex=True)
@@ -107,7 +111,6 @@ class System():
                 self.reference = new_refs       
 
                 HF = scf.RHF(mol).run()
-                #self.E_HF = HF.e_tot
                 self.enuc = HF.scf_summary['nuc']
                 self.log.info(f'Restricted HF energy: {HF.e_tot}')
 
@@ -115,7 +118,8 @@ class System():
                 r"""Generates the inital walker population on each reference
                 determinant
                 
-                :param mode: Specifies the type of initial guess. Default is noci."""
+                :param mode: Specifies the type of initial guess. Default is noci.
+                """
                 
                 if mode == 'noci':
                         noci_H = np.zeros(shape=(self.params['nr_scf'], self.params['nr_scf']))
@@ -125,17 +129,45 @@ class System():
                                         if i >=j:
                                                 occ_i = det_i.occupied_coefficients
                                                 occ_j = det_j.occupied_coefficients
-                                                noci_H[i,j], noci_H[j,i] = calc_hamiltonian(cws = occ_i, cxs = occ_j, cbs = self.cbs, enuc = self.enuc, holo = False)
-                                                noci_overlap[i,j], noci_overlap[j,i] = calc_overlap(cws = occ_i, cxs = occ_j, cbs = self.cbs, holo = False)
-                        self.noci_eigvals, self.noci_eigvecs = la.eigh(noci_H, b = noci_overlap)
-                        
+                                                noci_H[i,j], noci_H[j,i] = calc_hamiltonian(
+                                                    cws = occ_i, cxs = occ_j, 
+                                                    cbs = self.cbs, enuc = self.enuc, 
+                                                    holo = False
+                                                )
+                                                noci_overlap[i,j], noci_overlap[j,i] = calc_overlap(
+                                                    cws = occ_i, cxs = occ_j, 
+                                                    cbs = self.cbs, holo = False
+                                                )
+                        try:
+                                self.noci_eigvals, self.noci_eigvecs = la.eigh(noci_H, b = noci_overlap)
+                        except:
+                                self.log.info(
+                                    f'No projection onto nonzero subspace implemented (yet).
+                                    Use distinct reference determinants.'
+                                )
+                                raise ValueError   
+
                         self.E_NOCI = self.noci_eigvals[0]
                         self.log.info(f'E_NOCI = {self.E_NOCI}')
 
-                        indices = [i for i in range(self.params['dim']) if self.index_map_rev[i] in [(j, ((),()), ((),())) for j in range(self.params['nr_scf'])]]
+                        indices = [
+                            i for i in range(self.params['dim']) 
+                            if self.index_map_rev[i] in [
+                                (j, ((),()), ((),())) 
+                                for j in range(self.params['nr_scf'])
+                            ]
+                        ]
+                        
                         self.initial = np.zeros(shape=self.params['dim'], dtype=int)
+                        
+                        #norm_noci = np.sum(abs(self.noci_eigvecs[:,0]))
+                        norm_noci = np.linalg.norm(self.noci_eigvecs[:,0], ord=1)
                         for i in indices:
-                                self.initial[i] = int(self.params['nr_w'] * self.noci_eigvecs[int(i / (self.params['dim'] / self.params['nr_scf'])), 0] / np.sum(abs(self.noci_eigvecs[:,0])))
+                                ind1 = int(i / (self.params['dim'] / self.params['nr_scf']))
+                                self.initial[i] = int(
+                                    self.params['nr_w'] * self.noci_eigvecs[ind1, 0]
+                                )
+                        self.initial /= norm_noci
 
                 elif mode == 'ref':
                         nr = int(self.params['nr_w'] / len(self.reference))
@@ -191,6 +223,7 @@ class System():
                 r"""Converts between an integer index representation of the basis 
                 and an ex_str representation. It generates all determinant strings
                 for a certain level of theory."""
+                
                 index = 0
                 self.HilbertSpaceDim = np.zeros(self.params['theory_level'] + 1, dtype = int)
                 for nr_scf in range(self.params['nr_scf']):
@@ -198,8 +231,15 @@ class System():
                         n_electrons = reference.n_electrons
                         occs_alpha = range(reference.occupied_coefficients[0].shape[1])
                         occs_beta = range(reference.occupied_coefficients[1].shape[1])
-                        virs_alpha = range(n_electrons[0], n_electrons[0] + reference.virtual_coefficients[0].shape[1])
-                        virs_beta = range(n_electrons[1], n_electrons[0] + reference.virtual_coefficients[1].shape[1])
+                        virs_alpha = range(
+                            n_electrons[0], 
+                            n_electrons[0] + reference.virtual_coefficients[0].shape[1]
+                        )
+                        virs_beta = range(
+                            n_electrons[1], 
+                            n_electrons[1] + reference.virtual_coefficients[1].shape[1]
+                        )
+                        
                         for level in np.arange(0, self.params['theory_level'] + 1):   #iterates over single, double, ... excitations 
                                 if level == 0:
                                         ex_str = (nr_scf,((),()),((),()))
@@ -223,19 +263,26 @@ class System():
                                                                         self.HilbertSpaceDim[level] += 1
 
                 self.index_map_rev = dict((v,k) for k,v in self.index_map.items())
-                self.pdim = np.array([dim for dim in self.HilbertSpaceDim[:3]]) / np.sum(self.HilbertSpaceDim[:3])
-                if self.params['theory_level'] > 1:
-                        self.pdouble = self.pdim[0]/(self.pdim[0] + self.pdim[2])
 
                 self.params['dim'] = int(np.sum(self.HilbertSpaceDim))
                 self.refdim = self.params['dim'] // self.params['nr_scf']
-                self.scf_spaces = [np.arange(self.params['dim'])[i * self.refdim : (i+1) * self.refdim] for i in range(self.params['nr_scf'])]
+                
+                self.scf_spaces = [
+                    np.arange(self.params['dim'])[i * self.refdim : (i+1) * self.refdim] for i in range(self.params['nr_scf'])
+                ]
+                
                 self.ref_indices = [s[0] for s in self.scf_spaces]
 
                 self.initial = np.zeros(shape = self.params['dim'], dtype = int)
+                
                 self.H = np.load('Hamiltonian.npy')
-                self.H_dict = {}
                 self.overlap = np.load('overlap.npy')
+
+#                self.H = np.full((self.params['dim'], self.params['dim']), np.nan)
+#                self.overlap =  np.full((self.params['dim'], self.params['dim']), np.nan)
+        
+                self.H_dict = {}
+
                 self.log.info(f'Hilbert space dimensions: {self.HilbertSpaceDim}')
 
         def excite(self, sd: SingleDeterminant, 
@@ -278,8 +325,13 @@ class System():
                         dim_tmp = []
                         for n_a in range(level+1):
                                 n_b = int(level - n_a)
-                                if n_a > n_electrons[0] or n_b > n_electrons[1]: continue
-                                dim_tmp.append( int(binom(n_occ_a,n_a)) * int(binom(n_virt_a,n_a)) * int(binom(n_occ_b,n_b)) * int(binom(n_virt_b,n_b)) )               
+                                if n_a > n_electrons[0] or n_b > n_electrons[1]: 
+                                        continue
+                                
+                                dim_tmp.append( 
+                                    int(binom(n_occ_a,n_a)) * int(binom(n_virt_a,n_a)) 
+                                    * int(binom(n_occ_b,n_b)) * int(binom(n_virt_b,n_b)) 
+                                )               
                         self.subspace_partitioning.append(sum(dim_tmp))
 
                 self.cumdim = np.array(self.subspace_partitioning).cumsum()            
@@ -287,12 +339,16 @@ class System():
                 n_occ = n_occ_a + n_occ_b
                 n_virt = n_virt_a + n_virt_b
                 exs = np.sum(n_electrons)
-                self.shape = np.array([len(self.reference)] + [n_occ] * exs + [n_virt] * exs + [2] * exs)
+                self.shape = np.array(
+                    [len(self.reference)] + [n_occ] * exs 
+                    + [n_virt] * exs + [2] * exs
+                )
 
-                self.log.info(f'Hilbert space dimensions for excitation levels for a SCF solution: {self.subspace_partitioning}')
+                self.log.info(
+                    f'Hilbert space dimensions for excitation levels 
+                    for a SCF solution: {self.subspace_partitioning}'
+                )
                 
-                #define self.shape, compute all other cumulative properties as well
-
 
         def initialize(self) -> None:
                 self.initialize_references()
@@ -313,12 +369,23 @@ class Propagator(System):
                 self.E_proj = np.empty(self.params['it_nr'])
                 self.Ss = np.empty(self.params['it_nr']+1)
                 self.Nws = np.empty(self.params['it_nr'], dtype = int)
-                self.coeffs = np.zeros([self.params['it_nr']+1, self.params['dim']], dtype = int)
+                
+                self.coeffs = np.zeros(
+                    [self.params['it_nr']+1, self.params['dim']], dtype = int
+                )
+                
                 self.coeffs[0,:] = self.initial.copy()
                 self.S = self.Ss[0] = 0
                 self.curr_it = 0
-                self.n = []
+                self.n = np.empty(self.params['it_nr'])
                 self.cluster_level = np.sum(self.reference[0].n_electrons)
+                self.NoneCluster = Cluster(excitors = 
+                                        [Excitor(
+                                             excitation = self.index_map_rev[0], 
+                                             excips = 0
+                                         )]
+                                   )
+                self.constS = self.params['c'] / ( self.params['A'] * self.params['dt'] )
 
         def generate_s(self) -> int:
                 r"""Determines Cluster size for population dynamics 
@@ -340,7 +407,7 @@ class Propagator(System):
                 E_proj /= np.einsum('i,i->', overlap_tmp[index, :], coeffs)
                 self.E_proj[self.curr_it] = E_proj
 
-        def reeval_S(self, A: float = None, c: float = 0.01) -> None:
+        def reeval_S(self, A: float = None, c: float = None) -> None:
                 r"""Updates shift every A-th iteration.
 
                 :param A:
@@ -348,8 +415,8 @@ class Propagator(System):
 		:param dt:"""
                 N_new = self.Nws[self.curr_it]
                 N_old = self.Nws[self.curr_it - self.params['A']]
-                self.n.append(N_new/N_old)
-                self.S -= c / ( self.params['A'] * self.params['dt'] ) * np.log( N_new / N_old )
+                self.n[self.curr_it] = N_new/N_old
+                self.S -= self.constS * np.log( N_new / N_old )
 
 
         def excitation_generation(self, det_key) -> str:
@@ -365,77 +432,175 @@ class Propagator(System):
                 r = np.random.randint(low = 0, high = self.params['dim'])
                 return self.index_map_rev[r]
                 
+        def cluster_generation(self, nr_ex: int, ss: Sequence[int],
+                p_interm: np.ndarray, scf: int, coeffs_scf: np.ndarray
+                ) -> Sequence[Cluster]:
+                r"""Generates a set of nr_ex Clusters corresponding to Cluster
+                sizes provided in ss."""
+                clusters = np.repeat(self.NoneCluster, nr_ex)              
+                count = 0
+                for s in ss:                           
+                        #generate first cluster & check whether it is 0 
+                        if s:                                              
+                                cluster_index = np.random.choice(
+                                    np.arange(1,self.refdim), p = p_interm, 
+                                    replace=True, size = s
+                                )
+                                p_clust = np.prod(p_interm[cluster_index-1])
+                        else:                                              
+                                cluster_index = np.array([0])              
+                                p_clust = 1                                
+                                                                                   
+                        cluster_i = [
+                            self.index_map_rev[index] 
+                            for index in cluster_index + scf * self.refdim
+                        ]
+                        cluster_i = [
+                            Excitor(excitation = ex, 
+                                excips = coeffs_scf[scf,index]
+                            ) 
+                            for ex, index in zip(cluster_i,cluster_index)
+                        ]
+                                                                                   
+                        cluster_i = Cluster(excitors = cluster_i)          
+                        cl_ex, _ = cluster_i.collapse() #returns None, False if cluster is 0
+                                
+                        if cl_ex is None:                                  
+                                continue                                   
+                                                                                   
+                        cluster_i.p = p_clust                              
+                        cluster_i.size = s                                 
+                        clusters[count] = cluster_i 
+                        count += 1
+
+                return clusters[:count]
+
+        def cache_matelem(self, cluster: Cluster, j: int, cl_nr: int) -> Tuple:
+                r"""Calculates and stores Hamiltonian and overlap matrix
+                elements."""
+                ii = None
+                if len(cluster.excitation[1][0]) + len(cluster.excitation[1][1]) <= self.params['theory_level']:
+                                ii = self.index_map[cluster.excitation]
+
+                if ii is not None:      #TODO threading for for loop
+                        if np.isnan(self.H[ii,j]):
+                                det_i = self.generate_det(cluster.excitation)
+                                occ_i = det_i.occupied_coefficients
+                                det_j = self.get_det(j)
+                                occ_j = det_j.occupied_coefficients
+                                H_ij, _, overlap_ij, _ = calc_mat_elem(
+                                    occ_i = occ_i, occ_j = occ_j, cbs = self.cbs, 
+                                    enuc = self.enuc, sao = self.sao, 
+                                    hcore = self.hcore, E_NOCI = self.E_NOCI
+                                )
+                                self.H[ii,j] = H_ij
+                                self.overlap[ii,j] = overlap_ij
+                        else:
+                                H_ij = self.H[ii,j]
+                                overlap_ij = self.overlap[ii,j]
+                else:   #write to a Ham dirctionary, create second number of j excitation-> key will be (nr1, nr2)
+                        if (cl_nr, j) not in self.H_dict:
+                                det_i = self.generate_det(cluster.excitation)
+                                occ_i = det_i.occupied_coefficients
+                                det_j = self.get_det(j)
+                                occ_j = det_j.occupied_coefficients
+                                H_ij, _, overlap_ij, _ = calc_mat_elem(
+                                    occ_i = occ_i, occ_j = occ_j, cbs = self.cbs, 
+                                    enuc = self.enuc, sao = self.sao, 
+                                    hcore = self.hcore, E_NOCI = self.E_NOCI
+                                )
+                                self.H_dict[(cl_nr, j)] = (H_ij, overlap_ij)
+                        else:
+                                H_ij, overlap_ij = self.H_dict[(cl_nr, j)]
+                return H_ij, overlap_ij
+                
+
+
         def population_dynamics(self) -> None:    #parallelize for each scf solution
                 r"""Spawning/Death in one step due to nonorthogonality. 
-		Writes changes to current wavefunction to sp_coeffs."""
-                #NOTE Sample cluster size coeff times
-                #NOTE Sample excitors corresponding to cluster sizes
-                #NOTE Collapse new clusters and calculate their amplitudes, they may be outside of Hilbert space
-                #NOTE Check whether they are in Hilbert space
-                #NOTE Pick connected excitor (first we will do uniform prob dens)
-                #NOTE Calculate corresponding matrix elements
-                #NOTE   -> incorporate the fact that we may pick a double excited
-                #NOTE      determinant outside Hilbert space -> not allowed to spawn on
-                #NOTE      (restrict js on dets in Hilbert space)
+		Writes changes to current wavefunction to sp_coeffs. The
+                algorithm is implemented in the following way:
+                        1. Sample cluster size coeff times
+                        2. Sample excitors corresponding to cluster sizes
+                        3. Collapse new clusters and calculate their amplitudes, 
+                                they may be outside of Hilbert space
+                        4. Check whether they are in Hilbert space
+                        5. Pick connected excitor 
+                                (first we will do uniform prob dens)
+                        6. Calculate corresponding matrix elements
+                                   -> incorporate the fact that we may 
+                                        pick a double excited determinant 
+                                        outside Hilbert space 
+                                        -> not allowed to spawn on
+                                          (restrict js on dets in Hilbert space)
+                """
 
                 sp_coeffs = np.zeros(self.params['dim'], dtype = int) 
                 coeffs = self.coeffs[self.curr_it, :]
                 nr_excips = int(np.linalg.norm(coeffs, ord=1))
                 
                 #prepare parameters specific for each SCF solution
-                coeffs_scf = np.array([coeffs[i*self.refdim:(i+1)*self.refdim] for i in range(self.params['nr_scf'])])
-                nr_excips_scf = np.array([int(np.linalg.norm(c, ord=1)) for c in coeffs_scf]) #excludes references in probabilities
+                coeffs_scf = np.array(
+                    [coeffs[i*self.refdim:(i+1)*self.refdim] 
+                    for i in range(self.params['nr_scf'])]
+                )
+                nr_excips_scf = np.array(
+                    [int(np.linalg.norm(c, ord=1)) for c in coeffs_scf]
+                ) #excludes references in probabilities
                 p_scf = nr_excips_scf / nr_excips
                 p_coeff_scf = np.abs(coeffs_scf) / nr_excips_scf[:, np.newaxis]   #excludes references in probabilities
-                ss_scf = [min(self.cluster_level, self.refdim - 1 - len(np.isclose(c, 0).nonzero()[0])) for c in coeffs_scf]
+                ss_scf = [
+                    min(self.cluster_level, 
+                        self.refdim - 1 - len(np.isclose(c, 0).nonzero()[0])
+                    ) for c in coeffs_scf
+                ]
                 
-                p_dens_scf = [np.array([1/(2**(i+1)) for i in range(s+1)]) for s in ss_scf]
+                p_dens_scf = [
+                    np.array([1/(2**(i+1)) for i in range(s+1)]) 
+                    for s in ss_scf
+                ]
                 for p in p_dens_scf:
                         p[-1] *= 2
                 
                 N0_scf = np.array([c[0] for c in coeffs_scf])
-                nr_excips_compl = np.array([n-N for n,N in zip(nr_excips_scf, np.abs(N0_scf))])
+                nr_excips_compl = np.array(
+                    [n-N for n,N in zip(nr_excips_scf, np.abs(N0_scf))]
+                )
                 #TODO no need to get p_coeff_scf, normalization of p_interm can be done with nr_excips_compl
 
                 p_excit = 1/self.params['dim']
                 #iterate over SCF sol. -> this way we pick determiants with probabilities weighted by walker pops on their SCF sol.
+                
                 for i, nr_ex in enumerate(nr_excips_scf):
                         #pick cluster sizes -> iterate over them
                         p_sel = nr_ex
-                        ss = np.random.choice(a = range(ss_scf[i]+1), p = p_dens_scf[i], size = nr_ex) #could do this with expectation value -> no unique needed
+                        ss = np.random.choice(
+                            a = range(ss_scf[i]+1), p = p_dens_scf[i], 
+                            size = nr_ex
+                        ) #could do this with expectation value -> no unique needed
 
-                        clusters = []
-                        for s in ss:
-                                #generate first cluster & check whether it is 0
-                                if s != 0:
-                                        p_interm = p_coeff_scf[i][1:].copy()
-                                        p_interm /= np.linalg.norm(p_interm, ord = 1)
-                                        cluster_index = np.random.choice(np.arange(1,self.refdim), p = p_interm, replace=True, size = s) #previously False replace
-                                        p_clust = np.prod(p_interm[cluster_index-1])
-                                else:
-                                        p_clust = 1
-                                        cluster_index = np.array([0])
+                        p_interm = 0
+                        if ss_scf[i] != 0:
+                                p_interm = p_coeff_scf[i][1:].copy()
+                                p_interm /= np.linalg.norm(p_interm, ord = 1)
 
-                                cluster_i = [self.index_map_rev[index] for index in cluster_index + i * self.refdim]
-                                cluster_i = [Excitor(excitation = ex, excips = coeffs_scf[i,index]) 
-                                                             for ex, index in zip(cluster_i,cluster_index)]
-                                        
-                                cluster_i = Cluster(excitors = cluster_i)
-                                cl_ex, _ = cluster_i.collapse() #returns None, False if cluster is 0
-                                ###     
-                                if cl_ex is None:
-                                        continue
-
-                                cluster_i.p = p_clust
-                                cluster_i.size = s
-                                clusters.append(cluster_i)
-
-                        clusters = np.array(clusters)
-                        #NOTE we set ex_lvl to nelectrons instead of self.params['theory_level'] + 2
-                        cluster_numbers = np.array([exstr2number(exstr = cl.excitation, shape = self.shape, ex_lvl = np.sum(self.reference[0].n_electrons)) for cl in clusters])
+                        clusters = self.cluster_generation(nr_ex = nr_ex, 
+                            ss = ss, p_interm = p_interm, scf = i, 
+                            coeffs_scf = coeffs_scf
+                        )
+                        
+                        cluster_numbers = np.array([
+                            exstr2number(exstr = cl.excitation, 
+                                 shape = self.shape, 
+                                 ex_lvl = np.sum(self.reference[0].n_electrons)
+                            ) 
+                            for cl in clusters
+                        ])
                         
                         clusters_len = len(clusters)
-                        index_j = np.random.randint(0, self.params['dim'], size = clusters_len)
+                        index_j = np.random.randint(0, self.params['dim'], 
+                            size = clusters_len
+                        )
                         rand_vars = np.random.random(size = clusters_len)
 
                         for cluster, cl_nr, j, r in zip(clusters, cluster_numbers, index_j, rand_vars): #comes with cluster.excitation, cluster.sign, cluster.p
@@ -448,43 +613,8 @@ class Propagator(System):
 
                                 the_whole_of_p = amplitude / (p_sel * p_size * p_clust * p_excit)
 
-                                ii = None
-                                if len(cluster.excitation[1][0]) + len(cluster.excitation[1][1]) <= self.params['theory_level']:
-                                        ii = self.index_map[cluster.excitation]
-
-                                        ###CACHE HAMILTONIAN###
-                                if ii is not None:      #TODO threading for for loop
-                                        if np.isnan(self.H[ii,j]):
-                                                det_i = self.generate_det(cluster.excitation)
-                                                occ_i = det_i.occupied_coefficients
-                                                det_j = self.get_det(j)
-                                                occ_j = det_j.occupied_coefficients                        
-                                                H_ij, _ = calc_hamiltonian(cws = occ_i,
-                                                                           cxs = occ_j, cbs = self.cbs,
-                                                                           enuc = self.enuc, holo = False,
-                                                                           _sao = self.sao, _hcore = self.hcore)
-                                                overlap_ij, _ = calc_overlap(cws = occ_i, cxs = occ_j, cbs = self.cbs,
-                                                                             holo = False, _sao = self.sao)
-                                                H_ij -= self.E_NOCI * overlap_ij
-                                                self.H[ii,j] = H_ij
-                                                self.overlap[ii,j] = overlap_ij
-                                        else:
-                                                H_ij = self.H[ii,j]
-                                                overlap_ij = self.overlap[ii,j]
-                                else:   #write to a Ham dirctionary, create second number of j excitation-> key will be (nr1, nr2)
-                                        if (cl_nr, j) not in self.H_dict:
-                                                det_i = self.generate_det(cluster.excitation)
-                                                occ_i = det_i.occupied_coefficients
-                                                det_j = self.get_det(j)
-                                                occ_j = det_j.occupied_coefficients
-                                                H_ij, _, overlap_ij, _ = calc_mat_elem(occ_i = occ_i, occ_j = occ_j, 
-                                                                                       cbs = self.cbs, enuc = self.enuc, 
-                                                                                       sao = self.sao, hcore = self.hcore,
-                                                                                       E_NOCI = self.E_NOCI)
-                                                self.H_dict[(cl_nr, j)] = (H_ij, overlap_ij)
-                                        else:        
-                                                H_ij, overlap_ij = self.H_dict[(cl_nr, j)]
-                                ###END OF CACHE###
+                                #calculate & store matrix elements
+                                H_ij, overlap_ij = self.cache_matelem(cluster, j, cl_nr)
 
                                 p_spawn = self.params['dt'] * (H_ij - self.S * overlap_ij) * the_whole_of_p * cluster.sign
                                 s_int = int(p_spawn)
@@ -499,14 +629,19 @@ class Propagator(System):
                 self.coeffs[self.curr_it+1, :] = sp_coeffs
                 self.coeffs[self.curr_it+1, :] += coeffs
 
-                print(f'{self.curr_it}. SP_COEFF:        ', self.S, np.linalg.norm(self.coeffs[self.curr_it+1, :] ,ord = 1))
+                print(f'{self.curr_it}. Shift and Nr_w:        ', self.S, 
+                        np.linalg.norm(self.coeffs[self.curr_it+1, :] ,ord = 1)
+                )
 
         def run(self) -> None:
                 r"""Executes the population dynamics algorithm.
                 """
                 
                 for i in range(self.params['it_nr']):
-                        self.Nws[self.curr_it] = sum([int(np.round(np.abs(c))) for c in self.coeffs[self.curr_it, :]])
+                        self.Nws[self.curr_it] = sum([
+                            int(np.round(np.abs(c))) 
+                            for c in self.coeffs[self.curr_it, :]
+                        ])
                         
                         if i % self.params['A'] == 0 and i > self.params['delay']: 
                                 self.reeval_S()					#reevaluates S to stabilize # walkers
@@ -527,15 +662,14 @@ def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet,
                   ) -> Sequence[np.ndarray]:
         r"""Outsourced calculation of Hamiltonian and 
         overlap matrix elements to parallelize code."""
-        H_ij, H_ji = calc_hamiltonian(cws = occ_i, 
-                                      cxs = occ_j, cbs = cbs, 
-                                      enuc = enuc, holo = False,
-                                      _sao = sao, _hcore = hcore)
+        H_ij, H_ji = calc_hamiltonian(cws = occ_i, cxs = occ_j, cbs = cbs, 
+            enuc = enuc, holo = False, _sao = sao, _hcore = hcore
+        )
         overlap_ij, overlap_ji = 0., 0.
         if overlap_ii is None:  
-                overlap_ij, overlap_ji = calc_overlap(cws = occ_i, cxs = occ_j, 
-                                                        cbs = cbs, holo = False, 
-                                                        _sao = sao)
+                overlap_ij, overlap_ji = calc_overlap(
+                    cws = occ_i, cxs = occ_j, cbs = cbs, holo = False, _sao = sao
+                )
                 H_ij -= E_NOCI * overlap_ij
                 H_ji -= E_NOCI * overlap_ji
         else:
@@ -559,8 +693,10 @@ class Postprocessor(Propagator):
                                 det_j = self.get_det(j)
                                 occ_i = det_i.occupied_coefficients
                                 occ_j = det_j.occupied_coefficients
-                                self.overlap[i,j], self.overlap[j,i] = calc_overlap(cws = occ_i, cxs = occ_j, 
-                                                                                    cbs = self.cbs, holo = False)
+                                self.overlap[i,j], self.overlap[j,i] = calc_overlap(
+                                    cws = occ_i, cxs = occ_j, cbs = self.cbs, 
+                                    holo = False
+                                )
 
         def benchmark(self) -> None:
                 r"""Solves the generalized eigenproblem. We project out the eigenspace 
@@ -571,8 +707,10 @@ class Postprocessor(Propagator):
                         #get index of True -> evaluate H and overlap at those indices
                         indices = np.where(isnan)
                         
-                        pool = multiprocessing.Pool(processes = multiprocessing.cpu_count(), 
-                                                    initializer = mute)
+                        pool = multiprocessing.Pool(
+                            processes = multiprocessing.cpu_count(), 
+                            initializer = mute
+                        )
                         processes = {}
                         for i,j in zip(indices[0], indices[1]):
                                 det_i = self.get_det(i)
@@ -580,7 +718,10 @@ class Postprocessor(Propagator):
                                 occ_i = det_i.occupied_coefficients
                                 occ_j = det_j.occupied_coefficients
 
-                                processes[(i,j)] = pool.apply_async(calc_mat_elem, [occ_i, occ_j, self.cbs, self.enuc, self.sao, self.hcore, self.E_NOCI])
+                                processes[(i,j)] = pool.apply_async(
+                                    calc_mat_elem, 
+                                    [occ_i, occ_j, self.cbs, self.enuc, self.sao, self.hcore, self.E_NOCI]
+                                )
 
                         pool.close()
                         pool.join()
@@ -596,14 +737,24 @@ class Postprocessor(Propagator):
                 loc_th = 5e-06
                 indices = (self.ov_eigval > loc_th).nonzero()[0]  
                 projector_mat = self.ov_eigvec[:, indices]
-                projected_ov = np.einsum('ij,jk,kl->il', projector_mat.T, self.overlap, projector_mat)
+                projected_ov = np.einsum(
+                    'ij,jk,kl->il', projector_mat.T, self.overlap, projector_mat
+                )
                 
-                projected_ham = np.einsum('ij,jk,kl->il', projector_mat.T, self.H, projector_mat)
-                self.eigvals, self.eigvecs = la.eigh(projected_ham, b=np.round(projected_ov,int(-np.log10(ZERO_TOLERANCE))-4), type=1) #-> assert overlap elem normalized
+                projected_ham = np.einsum(
+                    'ij,jk,kl->il', projector_mat.T, self.H, projector_mat
+                )
+                self.eigvals, self.eigvecs = la.eigh(
+                    projected_ham, 
+                    b=np.round(projected_ov,int(-np.log10(ZERO_TOLERANCE))-4), 
+                    type=1
+                ) #-> assert overlap elem normalized
 
                 self.eigvecs = np.einsum('ij,jk->ik',projector_mat,self.eigvecs)
                 self.eigvecs = np.einsum('ij,jk', self.overlap, self.eigvecs)
-                self.log.info(f'Overlap Eigs:   {self.ov_eigval}, {self.ov_eigvec}\n')
+                self.log.info(
+                    f'Overlap Eigs:   {self.ov_eigval}, {self.ov_eigvec}\n'
+                )
                 
         def good_guess(self) -> np.ndarray:
                 ov_eigval, ov_eigvec = la.eigh(self.overlap)
@@ -611,28 +762,41 @@ class Postprocessor(Propagator):
                 ov_eigval = ov_eigval[indices]
                 projector_mat = ov_eigvec[:, indices]
                 ov_inv = np.diag(1 / ov_eigval)
-                ov_proj_inv = np.einsum('ij,jk,kl->il', projector_mat, ov_inv, projector_mat.T)
+                ov_proj_inv = np.einsum(
+                    'ij,jk,kl->il', projector_mat, ov_inv, projector_mat.T
+                )
                 vec = self.eigvecs[:,0]
                 return np.einsum('ij,j->i', ov_proj_inv, vec)
 
         def gs_degenerate(self) -> Sequence[int]:
                 r"""Returns a sequence of degenerate indices, corresponing to the ground
                 state energy of our system."""
-                rounded = (np.round(self.eigvals,int(-np.log10(ZERO_TOLERANCE))-12))
+                rounded = (np.round(
+                    self.eigvals,int(-np.log10(ZERO_TOLERANCE))-12
+                )
+                )
                 return (rounded == np.min(rounded)).nonzero()[0]
 
         def get_subspace(self, eigval: float, loc_th = 5e-06) -> np.ndarray:
                 r"""Get eigenvectors corresponding to certain eigenvalues"""
                 if np.isclose(eigval, 0., atol = loc_th):
-                        index = (np.isclose(self.ov_eigval,eigval, atol = loc_th)).nonzero()[0]
+                        index = (np.isclose(
+                            self.ov_eigval,eigval, atol = loc_th
+                        )).nonzero()[0]
                         return self.ov_eigvec[:, index]
+                
                 if not any(np.isclose(self.eigvals,eigval)): 
-                        self.log.warning(f'Subspace requested for eigval {eigval}, but not present in spectrum')
+                        self.log.warning(
+                            f'Subspace requested for eigval {eigval}, 
+                            but not present in spectrum'
+                        )
                         return np.zeros_like(self.eigvecs[:,0])
+                
                 index = (np.isclose(self.eigvals,eigval)).nonzero()[0]
                 return self.eigvecs[:, index]
 
-        def is_in_subspace(self, subspace: np.ndarray, array: np.ndarray, tolerance: float) -> bool:
+        def is_in_subspace(self, subspace: np.ndarray, array: np.ndarray, 
+                tolerance: float) -> bool:
                 r"""Checks whether given array is in specified subspace by projecting it
                 onto the (real) subspace and checking whether the (renormlized) vector is 
                 left unchanged.
@@ -669,18 +833,24 @@ class Postprocessor(Propagator):
                 
                 self.final /= np.linalg.norm(self.final)
                 
-                self.log.info(f'final benchmark:        {self.final}, {np.linalg.norm(self.final)}')
-                #include 0 space:
-                #if any(np.isclose(self.ov_eigval,0.)):
-                #        print(subspace.shape, self.get_subspace(0.).shape, self.get_subspace(0.))
-                #        subspace = np.concatenate((subspace, self.get_subspace(0.)), axis=1)
-                self.log.info(f'QMC final state in correct subspace? {self.is_in_subspace(subspace = subspace, array = self.coeffs[-1,:], tolerance = 1e-02)}')
+                self.log.info(
+                    f'final benchmark:        {self.final}, 
+                    {np.linalg.norm(self.final)}'
+                )
+                self.log.info(
+                    f'QMC final state in correct subspace? 
+                    {self.is_in_subspace(subspace = subspace, array = self.coeffs[-1,:], tolerance = 1e-02)}'
+                )
                 
                 #Projection onto different eigenstates
                 if self.params['benchmark']:
-                        #index = (np.isclose(self.ov_eigval,0)).nonzero()[0]
-                        A = np.concatenate((self.eigvecs, self.get_subspace(0.)), axis=1)
-                        self.proj_coeff = np.array([np.linalg.solve(A, self.coeffs[i,:]) for i in range(self.coeffs.shape[0])])
+                        A = np.concatenate(
+                            (self.eigvecs, self.get_subspace(0.)), axis=1
+                        )
+                        self.proj_coeff = np.array([
+                            np.linalg.solve(A, self.coeffs[i,:]) 
+                            for i in range(self.coeffs.shape[0])
+                        ])
                 
         def postprocessing(self, benchmark: bool = True) -> None:
                 r"""Takes care of normalisation of our walker arrays, degeneracy and dumps
@@ -689,14 +859,24 @@ class Postprocessor(Propagator):
                 if benchmark:
                         self.benchmark()
                 self.coeffs = np.einsum('ij,jk->ik', self.overlap,self.coeffs.T).T          
-                self.coeffs = np.array([self.coeffs[i,:]/np.linalg.norm(self.coeffs[i,:]) for i in range(self.params['it_nr'] + 1)])
+                self.coeffs = np.array([
+                    self.coeffs[i,:]/np.linalg.norm(self.coeffs[i,:]) 
+                    for i in range(self.params['it_nr'] + 1)
+                ])
                 
                 #Selection of ground state from degenerate eigenvectors
                 if benchmark:
                         self.degeneracy_treatment()
-                        self.log.info(f'Benchmark:\nEigvals:    {self.eigvals}\nEigvecs:        {self.eigvecs}')
-                        self.log.info(f'Final FCI energy:  {np.min(self.eigvals) + self.E_NOCI}')
-                        l = la.expm(-1000 * (self.H - min(self.eigvals) * self.overlap))
+                        self.log.info(
+                            f'Benchmark:\nEigvals:    {self.eigvals}\n
+                            Eigvecs:        {self.eigvecs}'
+                        )
+                        self.log.info(
+                            f'Final FCI energy:  {np.min(self.eigvals) + self.E_NOCI}'
+                        )
+                        l = la.expm(
+                            -1000 * (self.H - min(self.eigvals) * self.overlap)
+                        )
                         l2 = np.einsum('ij,j->i', l , self.coeffs[0,:])
                #         self.log.info(f'Imag. Time Prop.:  {l}')
                         self.log.info(f'Imag. Time Evol.: {l2/np.linalg.norm(l2)}')
@@ -713,15 +893,22 @@ class Statistics():
         def __init__(self, Ss: np.ndarray, params: dict) -> None:
                 self.params = params
                 self.Ss = Ss
-                self.i = int(np.log2(self.params['it_nr'] - self.params['delay'])) - 1
+                self.i = -1 + int(
+                    np.log2(self.params['it_nr'] - self.params['delay'])
+                )
                 self.S = np.array( Ss[self.params['it_nr'] - 2**self.i + 1 : ] )
                 self.n = len(self.S)
 
         def analyse(self, data: np.ndarray = None):
                 if data is None: data = self.S
                 data_summary = blocking.reblock(data)
-                err_bound = np.max([data_summary[i][4] for i in range(len(data_summary))])
-                np.save(os.path.join(self.params['workdir'], 'std_err.npy'), [data_summary[i][4] for i in range(len(data_summary))])
+                err_bound = np.max([
+                    data_summary[i][4] for i in range(len(data_summary))
+                ])
+                np.save(
+                    os.path.join(self.params['workdir'], 'std_err.npy'), 
+                    [data_summary[i][4] for i in range(len(data_summary))]
+                )
                 block = blocking.find_optimal_block(len(data), data_summary)
                 if np.isnan(block[0]):
                         return 0
@@ -733,7 +920,10 @@ class Statistics():
         #IMPLEMENT BINNING HERE TODO, calculcate correlation length to get n_bins
         def binning(self, n_bins: int) -> float:                
                 m_bins = int(len(self.S) / n_bins)
-                data = np.array([self.S[m_bins*i : m_bins*(i+1)] for i in range(n_bins)]) / m_bins
+                data = np.array([
+                    self.S[m_bins*i : m_bins*(i+1)] for i in range(n_bins)
+                ])
+                data /= m_bins
                 mean = np.mean(data, axis = 0)
                 error = (1 / n_bins / (n_bins-1)) * np.sum( (data-mean)**2 )
                 return error
@@ -788,14 +978,16 @@ if __name__ == '__main__':
                         0.073620        0.5003750       0.00000000
                         0.024030        0.5084740       1.00000000''')}
         
-                mol = gto.M(atom=[["Li", 0., 0., 0.],
-                                ["H", 0., 0., r ]], basis = basis, verbose = 0, unit = 'Angstrom') 
+                mol = gto.M(atom=[["Li", 0., 0., 0.],["H", 0., 0., r ]], 
+                    basis = basis, verbose = 0, unit = 'Angstrom'
+                ) 
                 mol_data = np.load('./LiH_dms.npy', allow_pickle=True)[()]
 
         if not Li:
                 r = 1.8
-                mol = gto.M(atom=[["H", 0., 0., 0.],
-                        ["H", 0., 0., r ]], basis='sto-3g', verbose=0, unit = 'Bohr') 
+                mol = gto.M(atom=[["H", 0., 0., 0.],["H", 0., 0., r ]], 
+                    basis='sto-3g', verbose=0, unit = 'Bohr'
+                ) 
                 mol_data = np.load('./H2_dms.npy', allow_pickle=True)[()]
 
         index = (np.isclose(mol_data['x'], r)).nonzero()[0][0]
@@ -804,11 +996,13 @@ if __name__ == '__main__':
         if 'workdir' not in params:
                 params['workdir'] = 'output'
 
-        sd_rhf, sd_uhf, sd_uhf2 = generate_scf(mol, init_guess_rhf = mol_data['rhf_dm'][index], 
-                                               init_guess_uhf = mol_data['uhf_dm'][index],
-                                               workdir = params['workdir'])
+        sd_rhf, sd_uhf, sd_uhf2 = generate_scf(
+            mol, init_guess_rhf = mol_data['rhf_dm'][index], 
+            init_guess_uhf = mol_data['uhf_dm'][index],
+            workdir = params['workdir']
+        )
         reference = [sd_rhf, sd_uhf, sd_uhf2]
-        reference = [sd_rhf, sd_uhf]
+#        reference = [sd_rhf, sd_uhf]
         
         system = System(mol = mol, reference = reference, params = params)
         system.initialize()

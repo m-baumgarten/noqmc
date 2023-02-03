@@ -14,7 +14,10 @@ import multiprocessing
 from matplotlib import rc
 import sys, os, shutil
 from itertools import combinations
-from typing import Tuple, Sequence
+from typing import (
+    Tuple, 
+    Sequence,
+)    
 from copy import deepcopy
 import time
 
@@ -41,9 +44,9 @@ from pyscf import scf, gto, fci
 from pyscf.gto.mole import Mole
 
 ####CUSTOM IMPORTS
-from calc_util import generate_scf
+from noqmc.utils.calc_util import generate_scf
 from pyblock import blocking
-from utilities import (
+from noqmc.utils.utilities import (
     Parser, 
     Log, 
     Timer,
@@ -89,7 +92,9 @@ class System():
                         if 'output' in os.listdir():
                                 shutil.rmtree('output')
                         os.mkdir('output')
-                        self.params['workdir'] = os.path.join(os.getcwd(), 'output')
+                        self.params['workdir'] = os.path.join(
+                                os.getcwd(), 'output'
+                        )
                 self.log = Log(filename = os.path.join(self.params['workdir'], 'log.out'))
                 self.log.info(f'Arguments:      {params}')                 
 
@@ -329,25 +334,33 @@ class Propagator(System):
                         #prepare self.H and self.overlap:
                         det_i = self.generate_det(key_i)
                         occ_i = det_i.occupied_coefficients
-                        set_js, index, counts = np.unique(js, return_index = True, return_counts = True)
+                        set_js, index, counts = np.unique(
+                            js, return_index = True, return_counts = True
+                        )
 
                         for j in set_js:
                                 if not np.isnan(self.H[i,j]):
                                         continue
                                 det_j = self.get_det(j)
                                 occ_j = det_j.occupied_coefficients
-                                self.H[i,j], self.H[j,i] = calc_hamiltonian(cws = occ_i, 
-                                                                        cxs = occ_j, cbs = self.cbs, 
-                                                                        enuc = self.enuc, holo = False,
-                                                                        _sao = self.sao, _hcore = self.hcore)
-                                self.overlap[i,j], self.overlap[j,i] = calc_overlap(cws = occ_i, cxs = occ_j, cbs = self.cbs, 
-                                                                        holo = False, _sao = self.sao)
+                                self.H[i,j], self.H[j,i] = calc_hamiltonian(
+                                    cws = occ_i, cxs = occ_j, cbs = self.cbs, 
+                                    enuc = self.enuc, holo = False, _sao = self.sao, 
+                                    _hcore = self.hcore
+                                )
+                                self.overlap[i,j], self.overlap[j,i] = calc_overlap(
+                                    cws = occ_i, cxs = occ_j, cbs = self.cbs, 
+                                    holo = False, _sao = self.sao
+                                )
                                 self.H[i,j] -= self.E_NOCI * self.overlap[i,j]
                                 if i != j:
                                         self.H[j,i] -= self.E_NOCI * self.overlap[j,i]
                         
-                        spawning_probs = [self.params['dim'] * self.params['dt'] * (self.H[i,j] - (self.S) * self.overlap[i,j])
-                                         for j in set_js]
+                        spawning_probs = [
+                            self.params['dim'] * self.params['dt'] 
+                            * (self.H[i,j] - (self.S) * self.overlap[i,j])
+                            for j in set_js
+                        ]
                         rand_vars = np.random.random(size=(len(spawning_probs)))
                         for j, n, ps, r in zip(set_js,counts,spawning_probs,rand_vars):
                                 ps_s = n * ps
@@ -360,7 +373,9 @@ class Propagator(System):
                 self.coeffs[self.curr_it+1, :] = self.sp_coeffs
                 self.coeffs[self.curr_it+1, :] += self.coeffs[self.curr_it, :]
 
-                print(f'{self.curr_it} new spawns:      ', self.sp_coeffs, np.linalg.norm(self.sp_coeffs, ord = 1), self.S )
+                print(f'{self.curr_it} new spawns:      ', self.sp_coeffs, 
+                    np.linalg.norm(self.sp_coeffs, ord = 1), self.S 
+                )
 
         def run(self) -> None:
                 r"""Executes the FCIQMC algorithm.
