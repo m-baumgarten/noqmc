@@ -11,9 +11,10 @@ $ git clone https://github.com/m-baumgarten/noqmc.git
 That's it.
 
 ## Dependencies
-revqcmagic
-pyblock 
-pyscf
+In order to run noqmc properly, the following python modules are required:  
+revqcmagic  
+pyblock  
+pyscf  
 
 
 
