@@ -15,6 +15,7 @@ In order to run noqmc properly, the following python modules are required:
 * `RevQCMagic`  
 * [`pyblock`](https://github.com/jsspencer/pyblock)  
 * [`PySCF`](https://github.com/pyscf/pyscf)  
+
 `RevQCMagic` can currently only be obtained by contacting Alex Thom for access. 
 
 ## Usage
