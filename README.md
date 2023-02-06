@@ -12,10 +12,10 @@ That's it.
 
 ## Dependencies
 In order to run noqmc properly, the following python modules are required:  
-* `revqcmagic`  
+* `RevQCMagic`  
 * [`pyblock`](https://github.com/jsspencer/pyblock)  
-* `pyscf`  
-
+* [`PySCF`](https://github.com/pyscf/pyscf)  
+`RevQCMagic` can currently only be obtained by contacting Alex Thom for access. 
 
 ## Usage
 To perform a simple NOCI-QMC calculation:
