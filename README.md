@@ -20,8 +20,8 @@ pyscf
 ## Usage
 To perform a simple NOCI-QMC calculation:
 
-````python
-import noqmc.nomrciqmc as no
+```python
+import noqmc.nomrciqmc as noci
 from pyscf import gto
 
 mol = gto.M(
@@ -29,8 +29,24 @@ mol = gto.M(
     basis = 'sto-3g', unit = 'Angstrom',
 )
 
-my_no = no.NOCIQMC(mol)
-my_no.run()
+my_noci = no.NOCIQMC(mol)
+my_noci.run()
 ```
+
+Similarly, to run a NOCCMC calculation:
+
+```python
+import noqmc.nomrccmc as nocc
+from pyscf import gto
+
+mol = gto.M(
+    atom = [['H', 0, 0, 0],['H', 0, 0, 1.3]],
+    basis = 'sto-3g', unit = 'Angstrom',
+)
+
+my_nocc = nocc.NOCCMC(mol)
+my_nocc.run()
+```
+
 
 
