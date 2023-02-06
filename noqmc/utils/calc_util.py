@@ -19,7 +19,7 @@ import os
 from qcmagic.core.sspace.single_determinant import SingleDeterminant
 
 from qcmagic.interfaces.converters.pyscf import scf_to_state
-from excips import flatten
+from noqmc.utils.excips import flatten
 
 from noqmc.utils.utilities import setup_workdir
 
