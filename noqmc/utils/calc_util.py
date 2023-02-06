@@ -80,7 +80,7 @@ def init_guess_mixed(mol,rhf,uhf,mixing_parameter=np.pi/4):
 
 def generate_scf(mol, init_guess_rhf = None, init_guess_uhf = None, workdir = 'output'):
     
-    setup_workdir(workdir)
+    #setup_workdir(workdir)
 
     rhf = scf.RHF(mol)
     uhf = scf.UHF(mol)
@@ -115,7 +115,7 @@ def generate_scf(mol, init_guess_rhf = None, init_guess_uhf = None, workdir = 'o
         f.write('E(FCI)  = %.12f' % efci)
         f.write('\nE(CCSD) = %.12f' % mycc.e_tot)
 
-    return sd_new_rhf, sd_uhf1, sd_uhf2
+    return [sd_new_rhf, sd_uhf1, sd_uhf2]
 
 def tensor2number(indices: np.ndarray, shape: np.ndarray) -> int:
         r"""E.g. indices = (3,4,1) of tensor with shape (5,5,5)"""

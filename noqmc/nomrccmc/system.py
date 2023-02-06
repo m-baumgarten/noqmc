@@ -41,13 +41,13 @@ from noqmc.utils.utilities import (
     Parser, 
     Log, 
     Timer,
+    setup_workdir,
 )
 from noqmc.utils.excips import (
     Cluster, 
     Excitor, 
     flatten,
 )    
-
 
 ####THRESHOLDS#####
 THRESHOLDS = {'ov_zero_th':       5e-06,
@@ -57,7 +57,7 @@ THRESHOLDS = {'ov_zero_th':       5e-06,
 class System():
         r"""...
 	"""
-        def __init__(self, mol: Mole, reference: list, params: dict) -> None:
+        def __init__(self, mol: Mole, params: dict) -> None:
                 r"""A system corresponding to a provided Hamiltonian. 
 		Specifies a Hilbert space basis.
 
@@ -65,20 +65,37 @@ class System():
 			       walker number, delay, verbosity and 
 			       random seed"""
                 assert params['delay'] > params['A']
-                assert params['theory_level'] <= sum(reference[0].n_electrons)
-   
+
+                if 'workdir' not in params: params['workdir'] = 'output'
+                setup_workdir(params['workdir'])
+
                 self.mol = mol
-                self.reference = reference
-                self.cbs = reference[0].configuration.get_subconfiguration("ConvolvedBasisSet")
+                #self.reference = reference
+                #self.cbs = reference[0].configuration.get_subconfiguration("ConvolvedBasisSet")
                 self.params = params
-                self.params['nr_scf'] = len(self.reference)
+                #self.params['nr_scf'] = len(self.reference)
                 np.random.seed(self.params['seed'])
                 self.overlap = None     #shape dim,dim
                 self.initial = None #np.empty shape dim
                 self.E_NOCI = None
                 self.index_map = {}
-                self.log = Log(filename = os.path.join(self.params['workdir'], 'log.out'))
+                self.log = Log(
+                    filename = os.path.join(self.params['workdir'], 'log.out')
+                )
+                
                 self.log.info(f'Arguments:      {params}')                
+
+        def get_reference(self, guess_rhf: np.ndarray, guess_uhf: np.ndarray) -> Sequence:
+                r""""""
+                self.reference = generate_scf(
+                    mol = self.mol, init_guess_rhf = guess_rhf, 
+                    init_guess_uhf = guess_uhf,
+                    workdir = self.params['workdir']
+                )
+                assert self.params['theory_level'] <= sum(self.reference[0].n_electrons)
+
+                self.cbs = self.reference[0].configuration.get_subconfiguration("ConvolvedBasisSet")
+                self.params['nr_scf'] = len(self.reference)
 
         def initialize_references(self) -> None:
                 r"""Adjusts RHF SingleDeterminant Objects to make them
@@ -256,11 +273,12 @@ class System():
 
                 self.initial = np.zeros(shape = self.params['dim'], dtype = int)
                 
-                self.H = np.load('Hamiltonian.npy')
-                self.overlap = np.load('overlap.npy')
-
-#                self.H = np.full((self.params['dim'], self.params['dim']), np.nan)
-#                self.overlap =  np.full((self.params['dim'], self.params['dim']), np.nan)
+                if 'Hamiltonian.npy' in os.listdir():
+                        self.H = np.load('Hamiltonian.npy')
+                        self.overlap = np.load('overlap.npy')
+                else:
+                        self.H = np.full((self.params['dim'], self.params['dim']), np.nan)
+                        self.overlap =  np.full((self.params['dim'], self.params['dim']), np.nan)
         
                 self.H_dict = {}
 

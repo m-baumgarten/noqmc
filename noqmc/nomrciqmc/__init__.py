@@ -1,9 +1,14 @@
+import numpy as np
+
 from noqmc.utils.utilities import Parser
 
-from noqmc.nomrccmc.modules.system import System
-from noqmc.nomrciqmc.modules.propagator import Propagator
-from noqmc.nomrccmc.modules.postprocessor import Postprocessor
-from noqmc.nomrccmc.modules.statistics import Statistics
+from noqmc.nomrccmc.system import System
+from noqmc.nomrciqmc.propagator import Propagator
+from noqmc.nomrccmc.postprocessor import Postprocessor
+from noqmc.nomrccmc.statistics import Statistics
+
+from pyscf.gto import Mole
+from pyscf import gto
 
 DEFAULT_CIQMC_ARGS = {
     'mode': 'noci',
@@ -17,30 +22,39 @@ DEFAULT_CIQMC_ARGS = {
     'delay': 20000,
     'theory_level': 1,
     'benchmark': 1,
-    }
+}
 
 class NOCIQMC(Propagator):
         __doc__ = """Initialises the system and sets up the propagator.\n""" + Propagator.__doc__
-        #define system here
-        def __init__(self, mol: Mole, args: dict = None):
-                #parse in args, have a bunch of standard settings
-                #define system
-                #initializse propagator
-                if args is not None:
-                        if isinstance(args, dict):
-                                system = System(args)
-                        elif isinstance(args, str):
-                                args = Parser().parse(args)
-                else: args = DEFAULT_CIQMC_ARGS 
+        def __init__(self, mol: Mole, params = None):
+                if params is not None:
+                        if isinstance(params, dict):
+                                params = params
+                        elif isinstance(params, str):
+                                params = Parser().parse(params)
+                else: params = DEFAULT_CIQMC_ARGS 
+                
+                self.mol = mol
+                self.system = System(mol = mol, params = params)
+                self.initialized = False
 
-                self.system = System(args)
+#                return self.system
+                
+        def run(self) -> Propagator:
+                if not self.initialized: self.initialize_references() 
+                self.prop = Propagator(self.system)
+                self.prop.run()
+                return self.prop
 
-                return self.system
-                #return Propagator()
-
-        def get_references(self):
-                #actuall, absorb this in the System class -> no HF calculations upon initialization of NOCIQMC
-                pass
+        def initialize_references(self, guess_rhf: np.ndarray = None, 
+                guess_uhf: np.ndarray = None
+                ):
+                r""""""
+                self.system.get_reference(
+                    guess_rhf = guess_rhf, guess_uhf = guess_uhf
+                )
+                self.system.initialize()
+                self.initialized = True
 
         def get_data(self):
                 pass
@@ -50,6 +64,8 @@ class NOCIQMC(Propagator):
 
 
 if __name__ == '__main__':
-
-        my_nociqmc = NOCIQMC()
+        mol = gto.M(atom = [['H', 0, 0, 0], ['H', 0, 0, 1.3]], 
+            basis = 'sto-3g', unit = 'Angstrom')
+        
+        my_nociqmc = NOCIQMC(mol)
         my_nociqmc.run()
