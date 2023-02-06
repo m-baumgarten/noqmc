@@ -12,9 +12,9 @@ That's it.
 
 ## Dependencies
 In order to run noqmc properly, the following python modules are required:  
-revqcmagic  
-pyblock  
-pyscf  
+* `revqcmagic`  
+* [`pyblock`](https://github.com/jsspencer/pyblock)  
+* `pyscf`  
 
 
 ## Usage
