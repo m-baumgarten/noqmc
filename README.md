@@ -49,5 +49,5 @@ my_nocc = nocc.NOCCMC(mol)
 my_nocc.run()
 ```
 
-
+However, it is advised to study the examples for improved convergence. Especially the NOCCMC method usually needs an accurate, system-specific set of parameters.
 

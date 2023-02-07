@@ -174,7 +174,7 @@ class Propagator(System):
                 self.coeffs[self.curr_it+1, :] = self.sp_coeffs
                 self.coeffs[self.curr_it+1, :] += self.coeffs[self.curr_it, :]
 
-                print(f'{self.curr_it} new spawns:      ', 
+                print(f'{self.curr_it} new spawns:      ', self.coeffs[self.curr_it+1, :], 
                     np.linalg.norm(self.sp_coeffs, ord = 1), self.S 
                 )
 

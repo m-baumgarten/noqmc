@@ -60,8 +60,8 @@ if __name__ == '__main__':
                 'nr_w': 3000,
                 'A': 10, 
                 'c': 0.01,
-                'it_nr': 500,
-                'delay': 200,
+                'it_nr': 800,
+                'delay': 400,
                 'theory_level': 1,
                 'benchmark': 1,
         }
@@ -72,6 +72,6 @@ if __name__ == '__main__':
                 guess_rhf = guess_rhf, guess_uhf = guess_uhf
         )
         my_prop = my_nociqmc.run()
-
+        print(my_prop.E_NOCI)
 
 

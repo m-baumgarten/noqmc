@@ -29,7 +29,7 @@ if __name__ == '__main__':
                 'dt': 0.01,
                 'nr_w': 3000,
                 'A': 10, 
-                'c': 0.01,
+                'c': 0.03,
                 'it_nr': 500,
                 'delay': 200,
                 'theory_level': 1,
@@ -42,6 +42,7 @@ if __name__ == '__main__':
                 guess_rhf = guess_rhf, guess_uhf = guess_uhf
         )
         my_prop = my_nociqmc.run()
-
-
+        print(my_prop.E_NOCI)
+        my_nociqmc.get_data()
+        print(my_nociqmc.__dict__)
 

@@ -241,6 +241,13 @@ class Postprocessor(Propagator):
                 #self.log.info(f'Overlap:        {self.overlap}')
                 #NOTE NEW
 
+
+        def plot(self):
+                pass
+
+def MAE(x: np.ndarray, y: np.ndarray) -> float:
+        return np.sum([np.abs(i-j) for i,j in zip(x,y)])
+
 if __name__ == '__main__':
         pass
 
