@@ -1,70 +1,31 @@
 #!/usr/bin/env python
-#---- author: Moritz Baumgarten ----# 
-#Implementation of a nonorthogonal multireference configuration
-#interaction quantum Monte Carlo (NOMRCI-QMC) method.
-#The Hilbert space for a common NOMRCI-QMC calculation is generated
-#by a subset of possible exitations of the reference determinats
-#(generally obtained from SCF metadynamics)
-#Based on Booth, Thom and Alavi [2009], and Thom and Head-Gordon [2008]
+"""---- author: Moritz Baumgarten ----# 
+Implementation of a nonorthogonal multireference configuration
+interaction quantum Monte Carlo (NOMRCI-QMC) method.
+The Hilbert space for a common NOMRCI-QMC calculation is generated
+by a subset of possible exitations of the reference determinats
+(generally obtained from SCF metadynamics)
+Based on Booth, Thom and Alavi [2009], and Thom and Head-Gordon [2008]
+"""
 
 import numpy as np
-import scipy.linalg as la
-import matplotlib.pyplot as plt
-import multiprocessing
-from matplotlib import rc
-import sys, os, shutil
-from itertools import combinations
+#import scipy.linalg as la
+import sys
 from typing import (
     Tuple, 
     Sequence,
 )    
-from copy import deepcopy
-import time
 
 ####QCMAGIC IMPORTS
-import qcmagic
 from qcmagic.core.cspace.basis.basisset import ConvolvedBasisSet
-from qcmagic.interfaces.converters.pyscf import scf_to_state
 from qcmagic.core.backends.nonorthogonal_backend import (
     calc_overlap, 
     calc_hamiltonian, 
-    _find_flavour_parameters,
 )
-from qcmagic.core.sspace.single_determinant import SingleDeterminant
-from qcmagic.auxiliary.qcmagic_standards import ZERO_TOLERANCE
-from qcmagic.core.drivers.noci.basic_noci_driver import solve_noci
-from qcmagic.interfaces.liqcm import (
-    get_1e_ints,
-    get_jk,
-    Operator,
-)
-
-###PYSCF IMPORTS
-from pyscf import scf, gto, fci
-from pyscf.gto.mole import Mole
 
 ####CUSTOM IMPORTS
-from noqmc.utils.calc_util import generate_scf
-from pyblock import blocking
-from noqmc.utils.utilities import (
-    Parser, 
-    Log, 
-    Timer,
-)
-
 from noqmc.nomrccmc.system import System
 
-rc('font', **{'family': 'serif', 'serif': ['Computer Modern'], 'size': 13})
-rc('text', usetex=True)
-
-
-####THRESHOLDS#####
-THRESHOLDS = {'ov_zero_th':       5e-06,
-              'rounding':         int(-np.log10(ZERO_TOLERANCE))-4,
-              }
-
-def mute():
-    sys.stdout = open(os.devnull, 'w')
 
 class Propagator(System):
         r"""Class for propagation of the wavefunction/walkers in imaginary time."""

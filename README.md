@@ -30,7 +30,7 @@ mol = gto.M(
     basis = 'sto-3g', unit = 'Angstrom',
 )
 
-my_noci = no.NOCIQMC(mol)
+my_noci = noci.NOCIQMC(mol)
 my_noci.run()
 ```
 

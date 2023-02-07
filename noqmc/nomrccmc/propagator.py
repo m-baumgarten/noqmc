@@ -5,20 +5,19 @@ a CI type wave function onto its ground state.
 """
 
 import numpy as np
-import scipy.linalg as la
-import sys, os, shutil
-from itertools import combinations
-from typing import Tuple, Sequence
+#import scipy.linalg as la
+import sys
+from typing import (
+    Tuple, 
+    Sequence,
+)
 
 ####QCMAGIC IMPORTS
-import qcmagic
 from qcmagic.core.cspace.basis.basisset import ConvolvedBasisSet
 from qcmagic.core.backends.nonorthogonal_backend import (
     calc_overlap, 
     calc_hamiltonian, 
 )
-from qcmagic.core.sspace.single_determinant import SingleDeterminant
-from qcmagic.auxiliary.qcmagic_standards import ZERO_TOLERANCE
 
 ####CUSTOM IMPORTS
 from noqmc.utils.calc_util import exstr2number
