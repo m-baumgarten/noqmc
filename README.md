@@ -51,3 +51,22 @@ my_nocc.run()
 
 However, it is advised to study the examples for improved convergence. Especially the NOCCMC method usually needs an accurate, system-specific set of parameters.
 
+## Documentation
+A documentation can be generated from the docstrings with sphinx, similarly to the documentation in `RevQCMagic`. To do so, execute
+
+```bash
+$ cd docs
+```
+
+Now, make the api reference by executing 
+
+```bash
+$ make html
+```
+
+Finally, the docs can be read from any webbrowser, e.g. 
+
+```bash
+$ firefox build/html/index.html
+```
+
