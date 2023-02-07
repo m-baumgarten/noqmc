@@ -153,9 +153,9 @@ class Propagator(System):
                                     cws = occ_i, cxs = occ_j, cbs = self.cbs, 
                                     holo = False, _sao = self.sao
                                 )
-                                self.H[i,j] -= self.E_NOCI * self.overlap[i,j]
+                                self.H[i,j] -= self.E_HF * self.overlap[i,j]
                                 if i != j:
-                                        self.H[j,i] -= self.E_NOCI * self.overlap[j,i]
+                                        self.H[j,i] -= self.E_HF * self.overlap[j,i]
                         
                         spawning_probs = [
                             self.params['dim'] * self.params['dt'] 
@@ -189,16 +189,12 @@ class Propagator(System):
                         self.Ss[self.curr_it+1] = self.S
                         
                         self.population_dynamics()
-                        #if self.params['verbosity'] > 0:
-                                #print(f'{i}. COEFFS:	', self.coeffs[self.curr_it, :])
-                                #self.log.info(f'{i}. COEFFS:   {self.coeffs[self.curr_it, :]}')
-                        #print(f'{i}', end='\r')
                         self.E()
                         self.curr_it += 1
 
 
 def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet, enuc: float, 
-                  sao: np.ndarray, hcore: float, E_NOCI: float, overlap_ii: float = None
+                  sao: np.ndarray, hcore: float, E_HF: float, overlap_ii: float = None
                   ) -> Sequence[np.ndarray]:
         r"""Outsourced calculation of Hamiltonian and 
         overlap matrix elements to parallelize code."""
@@ -210,11 +206,11 @@ def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet, enuc: f
         if overlap_ii is None:  
                 overlap_ij, overlap_ji = calc_overlap(cws = occ_i, cxs = occ_j, cbs = cbs, 
                                                                     holo = False, _sao = sao)
-                H_ij -= E_NOCI * overlap_ij
-                H_ji -= E_NOCI * overlap_ji
+                H_ij -= E_HF * overlap_ij
+                H_ji -= E_HF * overlap_ji
         else:
-                H_ij -= E_NOCI * overlap_ii
-                H_ji -= E_NOCI * overlap_ii
+                H_ij -= E_HF * overlap_ii
+                H_ji -= E_HF * overlap_ii
 
         return [H_ij, H_ji, overlap_ij, overlap_ji]
 

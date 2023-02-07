@@ -56,12 +56,12 @@ if __name__ == '__main__':
                 'mode': 'noci',
                 'verbosity': 1,
                 'seed': 69420,
-                'dt': 0.01,
+                'dt': 0.001,
                 'nr_w': 3000,
-                'A': 10, 
-                'c': 0.01,
-                'it_nr': 800,
-                'delay': 400,
+                'A': 7, 
+                'c': 0.03,
+                'it_nr': 10000,
+                'delay': 1000,
                 'theory_level': 1,
                 'benchmark': 1,
         }
@@ -74,4 +74,5 @@ if __name__ == '__main__':
         my_prop = my_nociqmc.run()
         print(my_prop.E_NOCI)
 
-
+        my_nociqmc.get_data()
+        print(my_nociqmc.__dict__)

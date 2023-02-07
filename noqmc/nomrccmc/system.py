@@ -70,14 +70,12 @@ class System():
                 setup_workdir(params['workdir'])
 
                 self.mol = mol
-                #self.reference = reference
-                #self.cbs = reference[0].configuration.get_subconfiguration("ConvolvedBasisSet")
                 self.params = params
-                #self.params['nr_scf'] = len(self.reference)
                 np.random.seed(self.params['seed'])
                 self.overlap = None     #shape dim,dim
                 self.initial = None #np.empty shape dim
                 self.E_NOCI = None
+                self.E_HF = None
                 self.index_map = {}
                 self.log = Log(
                     filename = os.path.join(self.params['workdir'], 'log.out')
@@ -112,7 +110,8 @@ class System():
 
                 HF = scf.RHF(self.mol).run()
                 self.enuc = HF.scf_summary['nuc']
-                self.log.info(f'Restricted HF energy: {HF.e_tot}')
+                self.E_HF = HF.e_tot
+                self.log.info(f'Restricted HF energy: {self.E_HF}')
 
         def initialize_walkers(self, mode: str = 'noci') -> None:
                 r"""Generates the inital walker population on each reference
