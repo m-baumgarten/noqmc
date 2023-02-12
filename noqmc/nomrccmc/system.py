@@ -139,6 +139,8 @@ class System():
                                                     cbs = self.cbs, holo = False
                                                 )
                         try:
+                                self.noci_H = noci_H
+                                self.noci_overlap = noci_overlap
                                 self.noci_eigvals, self.noci_eigvecs = la.eigh(noci_H, b = noci_overlap)
                         except:
                                 self.log.info(
