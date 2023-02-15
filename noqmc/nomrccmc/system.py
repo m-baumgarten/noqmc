@@ -70,10 +70,7 @@ class System():
                 setup_workdir(params['workdir'])
 
                 self.mol = mol
-                #self.reference = reference
-                #self.cbs = reference[0].configuration.get_subconfiguration("ConvolvedBasisSet")
                 self.params = params
-                #self.params['nr_scf'] = len(self.reference)
                 np.random.seed(self.params['seed'])
                 self.overlap = None     #shape dim,dim
                 self.initial = None #np.empty shape dim
@@ -122,22 +119,31 @@ class System():
                 """
                 
                 if mode == 'noci':
-                        noci_H = np.zeros(shape=(self.params['nr_scf'], self.params['nr_scf']))
-                        noci_overlap = np.zeros(shape=(self.params['nr_scf'], self.params['nr_scf']))
-                        for i,det_i in enumerate(self.reference):
-                                for j,det_j in enumerate(self.reference):
-                                        if i >=j:
-                                                occ_i = det_i.occupied_coefficients
-                                                occ_j = det_j.occupied_coefficients
-                                                noci_H[i,j], noci_H[j,i] = calc_hamiltonian(
-                                                    cws = occ_i, cxs = occ_j, 
-                                                    cbs = self.cbs, enuc = self.enuc, 
-                                                    holo = False
-                                                )
-                                                noci_overlap[i,j], noci_overlap[j,i] = calc_overlap(
-                                                    cws = occ_i, cxs = occ_j, 
-                                                    cbs = self.cbs, holo = False
-                                                )
+                        noci_H = np.zeros(
+                                shape=(self.params['nr_scf'], 
+                                        self.params['nr_scf'])
+                        )
+                        noci_overlap = np.zeros(
+                                shape=(self.params['nr_scf'], 
+                                        self.params['nr_scf'])
+                        )
+                         
+                        for i in range(self.params['nr_scf']):
+                                det_i = self.reference[i]
+                                occ_i = det_i.occupied_coefficients
+                                for k in range(self.params['nr_scf'] - i):
+                                        j = i+k
+                                        det_j = self.reference[j]
+                                        occ_j = det_j.occupied_coefficients
+                                        noci_H[i,j], noci_H[j,i] = calc_hamiltonian(
+                                            cws = occ_i, cxs = occ_j, 
+                                            cbs = self.cbs, enuc = self.enuc, 
+                                            holo = False
+                                        )
+                                        noci_overlap[i,j], noci_overlap[j,i] = calc_overlap(
+                                            cws = occ_i, cxs = occ_j, 
+                                            cbs = self.cbs, holo = False
+                                        )
                         try:
                                 self.noci_H = noci_H
                                 self.noci_overlap = noci_overlap
@@ -152,14 +158,10 @@ class System():
                         self.E_NOCI = self.noci_eigvals[0]
                         self.log.info(f'E_NOCI = {self.E_NOCI}')
 
-                        indices = [
-                            i for i in range(self.params['dim']) 
-                            if self.index_map_rev[i] in [
-                                (j, ((),()), ((),())) 
-                                for j in range(self.params['nr_scf'])
-                            ]
-                        ]
-                        
+                        indices = self.refdim * np.arange(
+                                self.params['nr_scf'], dtype=int
+                        )
+
                         self.initial = np.zeros(shape=self.params['dim'], dtype=int)
                         
                         norm_noci = np.linalg.norm(self.noci_eigvecs[:,0], ord=1)
@@ -171,8 +173,8 @@ class System():
 
                 elif mode == 'ref':
                         nr = int(self.params['nr_w'] / len(self.reference))
-                        for i,scf_sol in enumerate(self.reference):
-                                self.initial[self.index_map[(i, ((),()), ((),()))]] = nr
+                        for i in range(self.params['nr_scf']):
+                                self.initial[self.refdim * i] = nr
                 
                 self.log.info(f'Initial Guess:  {self.initial}')
 
@@ -205,7 +207,8 @@ class System():
                                dex:     Sequence of integers corresp. to deexcited MOs.
 
                 :returns: New SD object corresponding to ex_str"""
-                scf_sol, ex, dex = ex_str[0], ex_str[1], ex_str[2]      #where ex is ((0,1,2,...), (0,3,5,...))
+                #ex is ((0,1,2,...), (0,3,5,...))
+                scf_sol, ex, dex = ex_str[0], ex_str[1], ex_str[2]
                 reference = self.reference[scf_sol]
                 new_sd = self.excite(sd = reference, ex = ex, dex = dex)
                 return new_sd
@@ -240,15 +243,8 @@ class System():
                             n_electrons[1] + reference.virtual_coefficients[1].shape[1]
                         )
                         
-                        for level in np.arange(0, self.params['theory_level'] + 1):   #iterates over single, double, ... excitations 
-                                if level == 0:
-                                        ex_str = (nr_scf,((),()),((),()))
-                                        self.index_map[ex_str] = index
-                                        index += 1
-
-                                        self.HilbertSpaceDim[level] += 1
-                                        continue
-
+                        #iterates over single, double, ... excitations 
+                        for level in np.arange(0, self.params['theory_level'] + 1):
                                 for n_alpha in range(level+1):
                                         n_beta = int(level - n_alpha)
                                         if n_alpha > n_electrons[0] or n_beta > n_electrons[1]: continue
@@ -268,11 +264,13 @@ class System():
                 self.refdim = self.params['dim'] // self.params['nr_scf']
                 
                 self.scf_spaces = [
-                    np.arange(self.params['dim'])[i * self.refdim : (i+1) * self.refdim] for i in range(self.params['nr_scf'])
+                    np.arange(
+                        self.params['dim']
+                    )[i * self.refdim : (i+1) * self.refdim] 
+                        for i in range(self.params['nr_scf'])
                 ]
                 
                 self.ref_indices = [s[0] for s in self.scf_spaces]
-
                 self.initial = np.zeros(shape = self.params['dim'], dtype = int)
                 
                 if 'Hamiltonian.npy' in os.listdir():
@@ -290,7 +288,8 @@ class System():
                    ex: Tuple[Sequence[int],Sequence[int]] , 
                    dex: Tuple[Sequence[int],Sequence[int]]
                    ) -> SingleDeterminant:
-                r"""...
+                r"""Interchanges a set of occupied MOs with a corresponding set
+                of virtual MOs.
 
                 :param sd:  SingleDeterminant object used as reference 
                             determinant to create an excitation space.
@@ -300,13 +299,14 @@ class System():
                 :returns:   New SingleDeterminant object, with excited 
                             coefficient configuration."""
                 new_sd = sd.copy_from(sd, dtype=np.float64)
+                coeffs = new_sd.coefficients
                 for i, tup in enumerate(zip(ex,dex)):
                         ex_spin, dex_spin = tup[0], tup[1]
                         if ex_spin == dex_spin: 
                                 continue
-                        else:
-                                for to_ex, to_dex in zip(ex_spin, dex_spin): #ex_spin is either MOs in alpha or MOs in beta to be excited
-                                        new_sd.coefficients[i][:, [to_ex,to_dex]] = new_sd.coefficients[i][:, [to_dex,to_ex]]
+                        #ex_spin is either MOs in alpha or MOs in beta to be excited
+                        for to_ex, to_dex in zip(ex_spin, dex_spin):
+                                coeffs[i][:, [to_ex,to_dex]] = coeffs[i][:, [to_dex,to_ex]]
                 return new_sd
 
         def get_dimensions(self) -> None:
@@ -322,7 +322,9 @@ class System():
                 assert(n_occ_a + n_occ_b >= self.params['theory_level'])
                 
                 self.subspace_partitioning = []
-                for level in np.arange(0, self.params['theory_level'] + 3):   #iterates over single, double, ... excitations 
+                
+                #iterates over single, double, ... excitations 
+                for level in np.arange(0, self.params['theory_level'] + 3):
                         dim_tmp = []
                         for n_a in range(level+1):
                                 n_b = int(level - n_a)

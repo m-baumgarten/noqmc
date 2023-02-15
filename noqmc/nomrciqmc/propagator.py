@@ -135,14 +135,6 @@ class Propagator(System):
                 self.coeffs[self.curr_it+1, :] = self.sp_coeffs
                 self.coeffs[self.curr_it+1, :] += self.coeffs[self.curr_it, :]
 
-                if self.curr_it%2==0 and self.curr_it != 0:
-                        self.coeffs[self.curr_it+1, :] /= 2
-                        self.coeffs[self.curr_it+1, :] += self.coeffs[self.curr_it-1, :]/2
-
-                        #TODO write something for storage of the adjusted vectors
-                        #self.coeffs[1::2 , :] will give all odd indizes
-
-
                 print(f'{self.curr_it} new spawns:      ', self.coeffs[self.curr_it+1, :], 
                     np.linalg.norm(self.sp_coeffs, ord = 1), self.S 
                 )
