@@ -71,7 +71,9 @@ class Propagator(System):
                 overlap_tmp = np.nan_to_num(self.overlap)
                 H_tmp = np.nan_to_num(self.H)
                 
-                index = np.where(np.abs(coeffs_ref) == np.max(np.abs(coeffs_ref)))[0][0] #get index of maximum value 
+                index = np.where(
+                        np.abs(coeffs_ref) == np.max(np.abs(coeffs_ref))
+                )[0][0] #get index of maximum value 
                 index = self.ref_indices[index]
                 E_proj = np.einsum('i,i->', H_tmp[index,:], coeffs)
                 E_proj /= np.einsum('i,i->', overlap_tmp[index, :], coeffs)
@@ -314,7 +316,8 @@ class Propagator(System):
                         ])
                         
                         if i % self.params['A'] == 0 and i > self.params['delay']: 
-                                self.reeval_S()					#reevaluates S to stabilize # walkers
+                                #reevaluates S to stabilize # walkers
+                                self.reeval_S()	
                         
                         self.Ss[self.curr_it+1] = self.S
                         self.population_dynamics()
@@ -328,23 +331,18 @@ class Propagator(System):
 
 def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet, 
                   enuc: float, sao: np.ndarray, hcore: float, E_NOCI: float, 
-                  overlap_ii: float = None
                   ) -> Sequence[np.ndarray]:
         r"""Outsourced calculation of Hamiltonian and 
         overlap matrix elements to parallelize code."""
         H_ij, H_ji = calc_hamiltonian(cws = occ_i, cxs = occ_j, cbs = cbs, 
             enuc = enuc, holo = False, _sao = sao, _hcore = hcore
         )
-        overlap_ij, overlap_ji = 0., 0.
-        if overlap_ii is None:  
-                overlap_ij, overlap_ji = calc_overlap(
-                    cws = occ_i, cxs = occ_j, cbs = cbs, holo = False, _sao = sao
-                )
-                H_ij -= E_NOCI * overlap_ij
-                H_ji -= E_NOCI * overlap_ji
-        else:
-                H_ij -= E_NOCI * overlap_ii
-                H_ji -= E_NOCI * overlap_ii
+        
+        overlap_ij, overlap_ji = calc_overlap(
+            cws = occ_i, cxs = occ_j, cbs = cbs, holo = False, _sao = sao
+        )
+        H_ij -= E_NOCI * overlap_ij
+        H_ji -= E_NOCI * overlap_ji
 
         return [H_ij, H_ji, overlap_ij, overlap_ji]
 
