@@ -91,27 +91,15 @@ class Propagator(System):
                 self.S -= self.constS * np.log( N_new / N_old )
 
 
-        def excitation_generation(self, det_key) -> str:
-                r"""Decision tree for generating an excitation, given that we start on a
-                determinant with ex_str = key1. Check whether generated excitation is in 
-                Hilbert space. Would be best to choose a key from index_map 
-                
-                :param key1: Specifies reference for excitation
-                
-                :returns: ex_str of excitation to be generated"""
-                
-                #FIRST:  choose nr_scf (maybe based on noci overlap?)
-                r = np.random.randint(low = 0, high = self.params['dim'])
-                return self.index_map_rev[r]
-                
         def cluster_generation(self, nr_ex: int, ss: Sequence[int],
                 p_interm: np.ndarray, scf: int, coeffs_scf: np.ndarray
                 ) -> Sequence[Cluster]:
                 r"""Generates a set of nr_ex Clusters corresponding to Cluster
                 sizes provided in ss."""
                 clusters = np.repeat(self.NoneCluster, nr_ex)              
-                count = 0
-                for s in ss:                           
+                #count = 0
+                
+                for count, s in enumerate(ss):                           
                         #generate first cluster & check whether it is 0 
                         if s:                                              
                                 cluster_index = np.random.choice(
@@ -143,7 +131,7 @@ class Propagator(System):
                         cluster_i.p = p_clust                              
                         cluster_i.size = s                                 
                         clusters[count] = cluster_i 
-                        count += 1
+                        #count += 1
 
                 return clusters[:count]
 
@@ -151,10 +139,10 @@ class Propagator(System):
                 r"""Calculates and stores Hamiltonian and overlap matrix
                 elements."""
                 ii = None
-                if len(cluster.excitation[1][0]) + len(cluster.excitation[1][1]) <= self.params['theory_level']:
-                                ii = self.index_map[cluster.excitation]
+                if len(cluster.excitation[1][0] + cluster.excitation[1][1]) <= self.params['theory_level']:
+                        ii = self.index_map[cluster.excitation]
 
-                if ii is not None:      #TODO threading for for loop
+                #if ii is not None:
                         if np.isnan(self.H[ii,j]):
                                 det_i = self.generate_det(cluster.excitation)
                                 occ_i = det_i.occupied_coefficients
@@ -170,7 +158,9 @@ class Propagator(System):
                         else:
                                 H_ij = self.H[ii,j]
                                 overlap_ij = self.overlap[ii,j]
-                else:   #write to a Ham dirctionary, create second number of j excitation-> key will be (nr1, nr2)
+                
+                #write to a Ham dirctionary, create second number of j excitation-> key will be (nr1, nr2)
+                else:
                         if (cl_nr, j) not in self.H_dict:
                                 det_i = self.generate_det(cluster.excitation)
                                 occ_i = det_i.occupied_coefficients
@@ -223,7 +213,8 @@ class Propagator(System):
                 p_coeff_scf = np.abs(coeffs_scf) / nr_excips_scf[:, np.newaxis]   #excludes references in probabilities
                 ss_scf = [
                     min(self.cluster_level, 
-                        self.refdim - 1 - len(np.isclose(c, 0).nonzero()[0])
+                        #self.refdim - 1 - len(np.isclose(c, 0).nonzero()[0])
+                        self.refdim - 1 - (c==0).nonzero()[0]
                     ) for c in coeffs_scf
                 ]
                 

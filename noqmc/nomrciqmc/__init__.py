@@ -1,6 +1,7 @@
 import numpy as np
 
 from noqmc.utils.utilities import Parser
+from noqmc.utils.plot import Plot
 
 from noqmc.nomrccmc.system import System
 from noqmc.nomrciqmc.propagator import Propagator
@@ -76,9 +77,17 @@ class NOCIQMC(Propagator):
                 matrix elements and an error analysis."""
                 self.postpr = Postprocessor(self.prop)
                 self.postpr.postprocessing(benchmark = self.params['benchmark'])
-                
+                                
                 self.stat = Statistics(self.prop.Ss, self.params)
                 self.stat.analyse() 
+                self.postpr.data_summary = self.stat.data_summary
+
+        def plot(self) -> None:
+
+                plot = Plot()
+                data = plot.add_data(self.postpr)
+                plot.setup_figure(data)
+                plot.plot_data()
 
 if __name__ == '__main__':
         mol = gto.M(atom = [['H', 0, 0, 0], ['H', 0, 0, 1.8]], 

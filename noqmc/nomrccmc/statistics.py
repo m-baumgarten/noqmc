@@ -5,6 +5,7 @@ analysis for the shift.
 """
 
 import numpy as np
+import collections
 import scipy.linalg as la
 import sys, os, shutil
 from typing import Tuple, Sequence
@@ -21,29 +22,21 @@ class Statistics():
                 self.Ss = Ss
                 self.i = -1 + int(
                     np.log2(self.params['it_nr'] - self.params['delay'])
-                )
+                ) -1
                 self.S = np.array(Ss[self.params['it_nr'] - 2**self.i + 1 : ])
                 self.n = len(self.S)
 
-        def analyse(self, data: np.ndarray = None):
+        def analyse(self, data: np.ndarray = None) -> int:
                 if data is None: data = self.S
-                data_summary = blocking.reblock(data)
-                err_bound = np.max([
-                    data_summary[i][4] for i in range(len(data_summary))
-                ])
-                np.save(
-                    os.path.join(self.params['workdir'], 'std_err.npy'), 
-                    [data_summary[i][4] for i in range(len(data_summary))]
-                )
-                block = blocking.find_optimal_block(len(data), data_summary)
-                if np.isnan(block[0]):
+                self.data_summary = blocking.reblock(data)
+                self.block = blocking.find_optimal_block(
+                        len(data), self.data_summary
+                )[0]
+                if np.isnan(self.block):
+                        print('Blocking analysis did not converge.')
                         return 0
-                else:
-                        error = self.binning(block[0])
-                        print('Error by binning:        ', error, block)
-                        return error
+                return self.block
 
-      #IMPLEMENT BINNING HERE TODO, calculcate correlation length to get n_bins
         def binning(self, n_bins: int) -> float:                
                 m_bins = int(len(self.S) / n_bins)
                 data = np.array([
@@ -61,6 +54,7 @@ if __name__ == '__main__':
 
         stats = Statistics(Ss = Ss, params = params)
         error = stats.analyse()
+        print(stats.data_summary[0][1])
         print(error)
 
 

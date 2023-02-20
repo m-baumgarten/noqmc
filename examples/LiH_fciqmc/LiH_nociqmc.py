@@ -57,11 +57,11 @@ if __name__ == '__main__':
                 'verbosity': 1,
                 'seed': 69420,
                 'dt': 0.01,
-                'nr_w': 3000,
-                'A': 10, 
-                'c': 0.01,
-                'it_nr': 800,
-                'delay': 400,
+                'nr_w': 10000,
+                'A': 12, 
+                'c': 0.03,
+                'it_nr': 100000,
+                'delay': 20000,
                 'theory_level': 1,
                 'benchmark': 1,
         }
@@ -72,6 +72,6 @@ if __name__ == '__main__':
                 guess_rhf = guess_rhf, guess_uhf = guess_uhf
         )
         my_prop = my_nociqmc.run()
-        print(my_prop.E_NOCI)
-
-
+        my_nociqmc.get_data()
+ 
+        my_nociqmc.plot()

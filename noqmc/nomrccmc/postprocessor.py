@@ -24,7 +24,7 @@ from qcmagic.auxiliary.qcmagic_standards import ZERO_TOLERANCE
 
 from noqmc.nomrccmc.system import System
 from noqmc.nomrccmc.propagator import Propagator
-
+from noqmc.nomrccmc.propagator import calc_mat_elem
 def mute():
     sys.stdout = open(os.devnull, 'w')
 
@@ -34,22 +34,8 @@ class Postprocessor(Propagator):
         manipulation and evaluation tasks"""
         def __init__(self, prop: Propagator) -> None:
                 #TODO predefine all stuff we want to import from prop.__dict__
-
                 self.__dict__.update(prop.__dict__)
 
-        def get_overlap(self) -> None:
-                r"""Slow and dirty method to get the full overlap matrix."""
-                for i in range(self.params['dim']):
-                        for j in range(self.params['dim']):
-                                if i>j: continue
-                                det_i = self.get_det(i)
-                                det_j = self.get_det(j)
-                                occ_i = det_i.occupied_coefficients
-                                occ_j = det_j.occupied_coefficients
-                                self.overlap[i,j], self.overlap[j,i] = calc_overlap(
-                                    cws = occ_i, cxs = occ_j, cbs = self.cbs, 
-                                    holo = False
-                                )
 
         def benchmark(self) -> None:
                 r"""Solves the generalized eigenproblem. We project out the eigenspace 
@@ -58,6 +44,8 @@ class Postprocessor(Propagator):
                 isnan = np.isnan(self.H)
                 if any(isnan.flatten()):
                         #get index of True -> evaluate H and overlap at those indices
+                        
+                        #TODO make sure we only have unique tuples of indices, currently we have double
                         indices = np.where(isnan)
                         
                         pool = multiprocessing.Pool(
@@ -66,6 +54,7 @@ class Postprocessor(Propagator):
                         )
                         processes = {}
                         for i,j in zip(indices[0], indices[1]):
+#                                if i > j: continue
                                 det_i = self.get_det(i)
                                 det_j = self.get_det(j)
                                 occ_i = det_i.occupied_coefficients
@@ -79,12 +68,16 @@ class Postprocessor(Propagator):
                         pool.close()
                         pool.join()
                         for i,j in zip(indices[0], indices[1]):
+#                                if i > j: continue
                                 processes[(i,j)] = processes[(i,j)].get()
                                 self.H[i,j] = processes[(i,j)][0]
                                 self.H[j,i] = processes[(i,j)][1]
                                 self.overlap[i,j] = processes[(i,j)][2]
                                 self.overlap[j,i] = processes[(i,j)][3]
 
+ #                       for key, value in processes.items():
+ #                               processes[key] = value.get()
+ #                               self.H[i,j], self.H[j,i], self.overlap[i,j], self.overlap[j,i] = processes[key]
 
                 self.ov_eigval, self.ov_eigvec = la.eigh(self.overlap)
                 loc_th = 5e-06
@@ -116,7 +109,7 @@ class Postprocessor(Propagator):
                 projector_mat = ov_eigvec[:, indices]
                 ov_inv = np.diag(1 / ov_eigval)
                 ov_proj_inv = np.einsum(
-                    'ij,jk,kl->il', projector_mat, ov_inv, projector_mat.T
+                    'ij,jk,lk->il', projector_mat, ov_inv, projector_mat
                 )
                 vec = self.eigvecs[:,0]
                 return np.einsum('ij,j->i', ov_proj_inv, vec)
@@ -160,13 +153,12 @@ class Postprocessor(Propagator):
                 :param tolerance: Specifies tolerance when comparing array and projected array.
 
                 :returns: Boolean indicating if array in subspace or not."""
-                array /= np.linalg.norm(array)
 
-                proj_overlap = np.einsum('ij,jk', subspace.T, subspace)
-                dot_coeff = np.einsum('ij,j', subspace.T, array)
+                proj_overlap = np.einsum('ij,jk->ik', subspace.T, subspace)
+                dot_coeff = np.einsum('ij,j->i', subspace.T, array)
                 solve_coeff = np.linalg.solve(proj_overlap, dot_coeff)
-                new = np.einsum('ij,j', subspace, solve_coeff.T).T 
-                new /= np.linalg.norm(new)
+                new = np.einsum('ij,j->i', subspace, solve_coeff) #.T 
+                new /= np.linalg.norm(new, ord = 2)
                 return np.allclose(a = array, b = new, atol = tolerance)
 
         def degeneracy_treatment(self) -> None:
@@ -200,6 +192,7 @@ class Postprocessor(Propagator):
                         A = np.concatenate(
                             (self.eigvecs, self.get_subspace(0.)), axis=1
                         )
+                        
                         self.proj_coeff = np.array([
                             np.linalg.solve(A, self.coeffs[i,:]) 
                             for i in range(self.coeffs.shape[0])
@@ -208,18 +201,18 @@ class Postprocessor(Propagator):
         def postprocessing(self, benchmark: bool = True) -> None:
                 r"""Takes care of normalisation of our walker arrays, degeneracy and dumps
                 everything to the log file."""
-                #Normalisation
+                #TODO Normalisation
                 if benchmark:
                         self.benchmark()
-                self.coeffs = np.einsum('ij,jk->ik', self.overlap,self.coeffs.T).T          
-                self.coeffs = np.array([
-                    self.coeffs[i,:]/np.linalg.norm(self.coeffs[i,:]) 
-                    for i in range(self.params['it_nr'] + 1)
-                ])
+                
+                self.coeffs = np.einsum('ij,kj->ik', self.overlap,self.coeffs)
+                self.coeffs /= np.sqrt(np.einsum('ki,ki->i', self.coeffs, self.coeffs))
+                self.coeffs = self.coeffs.T
                 
                 #Selection of ground state from degenerate eigenvectors
                 if benchmark:
                         self.degeneracy_treatment()
+                        
                         self.log.info(
                             f'Benchmark:\nEigvals:    {self.eigvals}\n\
                             Eigvecs:        {self.eigvecs}'
@@ -227,12 +220,12 @@ class Postprocessor(Propagator):
                         self.log.info(
                             f'Final FCI energy:  {np.min(self.eigvals) + self.E_NOCI}'
                         )
-                        l = la.expm(
+                        
+                        propagator = la.expm(
                             -1000 * (self.H - min(self.eigvals) * self.overlap)
                         )
-                        l2 = np.einsum('ij,j->i', l , self.coeffs[0,:])
-               #         self.log.info(f'Imag. Time Prop.:  {l}')
-                        self.log.info(f'Imag. Time Evol.: {l2/np.linalg.norm(l2)}')
+                        propagated = np.einsum('ij,j->i', propagator, self.coeffs[0,:])
+                        self.log.info(f'Imag. Time Evol.: {propagated/np.linalg.norm(propagated)}')
 
                 #Dump output
                 self.log.info(f'Initial Guess:  {self.initial}')
@@ -241,9 +234,8 @@ class Postprocessor(Propagator):
                 #self.log.info(f'Overlap:        {self.overlap}')
                 #NOTE NEW
 
+#NOTE self.proj_coeff, self.coeffs, self.E_proj, self.Ss
 
-        def plot(self):
-                pass
 
 def MAE(x: np.ndarray, y: np.ndarray) -> float:
         return np.sum([np.abs(i-j) for i,j in zip(x,y)])

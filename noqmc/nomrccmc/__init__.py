@@ -34,14 +34,18 @@ class NOCCMC(Propagator):
         """Object that wraps initialization of the system, running the 
         population dynamics, processing the results and performing a 
         blocking analysis on it."""
-        def __init__(self, mol: Mole, params = None):
+        def __init__(self, mol: Mole, params = None, **kwargs):
                 if params is not None:
                         if isinstance(params, dict):
                                 params = params
                         elif isinstance(params, str):
                                 params = Parser().parse(params)
                 else: params = DEFAULT_CCMC_ARGS 
-                
+               
+                params.update(kwargs)
+                if not all(key in DEFAULT_CCMC_ARGS for key in params):
+                        raise NotImplementedError
+
                 self.mol = mol
                 self.system = System(mol = mol, params = params)
                 self.initialized = False
