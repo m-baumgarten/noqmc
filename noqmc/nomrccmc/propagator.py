@@ -274,6 +274,7 @@ class Propagator(System):
 
                                 if s == 0: amplitude = N0_scf[i]
                                 else: amplitude = int(N0_scf[i]) ** (1-int(s)) * cluster.amplitude
+                                #amplitude = int(N0_scf[i]) ** (1-int(s)) * cluster.amplitude if s else N0_scf[i]
 
                                 the_whole_of_p = amplitude / (p_sel * p_size * p_clust * p_excit)
 

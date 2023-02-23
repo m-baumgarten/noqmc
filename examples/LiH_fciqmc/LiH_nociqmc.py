@@ -61,8 +61,8 @@ if __name__ == '__main__':
                 'nr_w': 4000,
                 'A': 12, 
                 'c': 0.03,
-                'it_nr': 4000,
-                'delay': 1000,
+                'it_nr': 400,
+                'delay': 100,
                 'theory_level': 1,
                 'benchmark': 1,
         }

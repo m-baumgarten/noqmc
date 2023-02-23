@@ -214,10 +214,10 @@ class Postprocessor(Propagator):
                         A = np.concatenate(
                             (self.eigvecs, self.get_subspace(0.)), axis=1
                         )
-                        
+
                         self.proj_coeff = np.array([
                             np.linalg.solve(A, self.coeffs[i,:]) 
-                            for i in range(self.coeffs.shape[0])
+                            for i in range(self.coeffs.shape[0]) #TODO this is params['it_nr']
                         ])
                 
         def postprocessing(self, benchmark: bool = True) -> None:
@@ -228,10 +228,19 @@ class Postprocessor(Propagator):
                 
                 #Remove 0 space and normalize
 #                self.coeffs = np.einsum('ij,kj->ik', self.overlap ,self.coeffs)
+                self.old_coeffs = self.coeffs.copy()
+                
                 self.coeffs = np.einsum('ij,kj->ik', self.projector1, self.coeffs)
-
                 self.coeffs /= np.sqrt(np.einsum('ki,ki->i', self.coeffs, self.coeffs))
                 self.coeffs = self.coeffs.T
+
+                self.nullspace_evol = np.einsum('ij,kj->ik', np.eye(self.params['dim']) - self.projector1, self.old_coeffs)
+                self.nullspace_evol /= np.sqrt(np.einsum('ki,ki->i', self.nullspace_evol, self.nullspace_evol))
+                tmp = np.einsum('ij,jk->ik', self.H, self.nullspace_evol) / self.nullspace_evol
+                print('0 space eigval??:        ', tmp.shape, tmp)
+                tmp_eigval, _ = np.linalg.eigh(self.H)
+                print('tmp eigval:      ', tmp_eigval)
+                self.nullspace_evol = self.nullspace_evol.T
                 
                 #Selection of ground state from degenerate eigenvectors
                 if benchmark:

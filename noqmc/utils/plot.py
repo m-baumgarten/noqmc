@@ -13,7 +13,8 @@ SUPPORTED_DATA = [
         'data_summary',
         'coeffs',
         'proj_coeff',
-        'Nws'
+        'Nws',
+        'nullspace_evol'
 ]
 
 class Plot():
@@ -122,6 +123,19 @@ class Plot():
                 plotting."""
                 pass
 
+        def plot_nullspace(self, ax) -> None:
+                x_axis = np.arange(self.params['it_nr'] + 1) * self.params['dt']
+                for i in range(self.params['dim']):
+                        ax.plot(x_axis,
+                                self.data['nullspace_evol'][:,i], color = f'C{i}', 
+                                label=f'{i}' if i <= self.max_lines else None
+                        )
+
+                ax.set_ylabel('0-space components')
+                ax.set_xlabel(r'$\tau$')
+                ax.legend(frameon=False)
+               
+
         def plot_data(self) -> None:
                 r""""""
                 #TODO adjust according to data passed 
@@ -130,6 +144,7 @@ class Plot():
                 self.plot_coeffs(self.ax[0,0], self.ax[1,0])
                 self.plot_walkers(self.ax[0,2])
                 self.plot_stderr(self.ax[1,1])
-                self.ax[1,2].set_axis_off()
+                self.plot_nullspace(self.ax[1,2])
+#                self.ax[1,2].set_axis_off()
                 plt.savefig('tmp.png')
                 plt.show()
