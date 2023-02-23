@@ -25,9 +25,13 @@ from qcmagic.auxiliary.qcmagic_standards import ZERO_TOLERANCE
 from noqmc.nomrccmc.system import System
 from noqmc.nomrccmc.propagator import Propagator
 from noqmc.nomrccmc.propagator import calc_mat_elem
+
 def mute():
     sys.stdout = open(os.devnull, 'w')
 
+
+#TODO implement global thresholds, since they usually differ from revqcmagic
+#thresholds
 
 class Postprocessor(Propagator):
         r"""Class for all sorts of data 
@@ -98,10 +102,9 @@ class Postprocessor(Propagator):
                     type=1
                 )
 
-                #Project back into the whole, overcomplete space and remove the 0 space 
-                #by applying the overlap
+                #Project back into the whole, overcomplete space whereas now the
+                #eigenvectors do not have any components in the null space.
                 self.eigvecs = np.einsum('ij,jk->ik', projector_mat, self.eigvecs)
-#                self.eigvecs = np.einsum('ij,jk->ik', self.overlap, self.eigvecs)
                 self.log.info(
                     f'Overlap Eigs:   {self.ov_eigval}, {self.ov_eigvec}\n'
                 )
@@ -227,7 +230,6 @@ class Postprocessor(Propagator):
                         self.benchmark()
                 
                 #Remove 0 space and normalize
-#                self.coeffs = np.einsum('ij,kj->ik', self.overlap ,self.coeffs)
                 self.old_coeffs = self.coeffs.copy()
                 
                 self.coeffs = np.einsum('ij,kj->ik', self.projector1, self.coeffs)
@@ -236,10 +238,6 @@ class Postprocessor(Propagator):
 
                 self.nullspace_evol = np.einsum('ij,kj->ik', np.eye(self.params['dim']) - self.projector1, self.old_coeffs)
                 self.nullspace_evol /= np.sqrt(np.einsum('ki,ki->i', self.nullspace_evol, self.nullspace_evol))
-                tmp = np.einsum('ij,jk->ik', self.H, self.nullspace_evol) / self.nullspace_evol
-                print('0 space eigval??:        ', tmp.shape, tmp)
-                tmp_eigval, _ = np.linalg.eigh(self.H)
-                print('tmp eigval:      ', tmp_eigval)
                 self.nullspace_evol = self.nullspace_evol.T
                 
                 #Selection of ground state from degenerate eigenvectors
