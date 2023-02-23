@@ -48,8 +48,10 @@ class Propagator(System):
                 self.curr_it = 0
                 self.n = []
 
+                self.E_ref = self.E_HF
+                
                 self.E_proj = np.empty(self.params['it_nr']+1)
-                self.E_proj[0] = 0
+                self.E_proj[0] = self.E_NOCI - self.E_ref
 
         def E(self) -> None:
                 r"""Calculates energy estimator at current iteration."""
@@ -62,7 +64,7 @@ class Propagator(System):
                 E_proj /= np.einsum('i,i->', overlap_tmp[self.index, :], coeffs)
                 self.E_proj[self.curr_it+1] = E_proj
 
-        def Shift(self, A: float = None, c: float = 0.001) -> None:
+        def Shift(self, A: float = None, c: float = 0.03) -> None:
                 r"""Updates shift every A-th iteration.
 
                 :param A: Interval of reevaluation of S
@@ -104,7 +106,7 @@ class Propagator(System):
                                     occ_i = occ_i, occ_j = occ_j, 
                                     cbs = self.cbs, enuc = self.enuc, 
                                     sao = self.sao, hcore = self.hcore,
-                                    E_NOCI = self.E_NOCI
+                                    E_ref = self.E_ref
                                 )
                                 self.H[i,j], self.H[j,i] = elem[0], elem[1]
                                 self.overlap[i,j], self.overlap[j,i] = elem[2], elem[3]

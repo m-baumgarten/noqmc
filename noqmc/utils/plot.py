@@ -71,15 +71,15 @@ class Plot():
                 x_axis = np.arange(params['it_nr'] + 1) * params['dt']
                 
                 ##DETERMINANTS
-                for i in range(self.max_lines):
+#                for i in range(self.max_lines):
+                for i in range(params['dim']):        
                         ax1.plot(x_axis, self.data['coeffs'][:,i], color = f'C{i}', 
-                                label=fr'$\langle D_{i}| \Psi \rangle$'
+                                label=fr'$\langle D_{i}| \Psi \rangle$' if i <= self.max_lines else None
                         )
                         if self.eigvals is not None:
                                 ax1.hlines(self.final[i], x_axis[-1], 0, 
                                         color=f'C{i}', linestyle = 'dashed'
                                 )
-                
                 ax1.set_ylabel(r'Ground State Coeff. $C_i$')
                 ax1.set_xlabel(r'$\tau$')
                 ax1.legend(frameon=False)
@@ -87,10 +87,10 @@ class Plot():
                 ##ADIABATIC
                 if self.eigvals is None: return None
                         
-                for i in range(self.max_lines):
+                for i in range(params['dim']):
                         ax2.plot(x_axis,
                                 self.data['proj_coeff'][:,i], color = f'C{i}', 
-                                label=f'{i}'
+                                label=f'{i}' if i <= self.max_lines else None
                         )
 
                 ax2.set_ylabel('Contrib. to Coeff')

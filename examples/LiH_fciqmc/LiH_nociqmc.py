@@ -46,7 +46,8 @@ def setup_mol(r: float):
         return mol
 
 if __name__ == '__main__':
-        
+
+        #unsmoothness: mode 'noci', dt 0.002, nr_w 4000, A 12, c 0.03, it_nr 40000, delay 10000, theory_level 1
         r = 3
         mol = setup_mol(r = r)
 
@@ -57,11 +58,11 @@ if __name__ == '__main__':
                 'verbosity': 1,
                 'seed': 69420,
                 'dt': 0.01,
-                'nr_w': 10000,
+                'nr_w': 4000,
                 'A': 12, 
                 'c': 0.03,
-                'it_nr': 100000,
-                'delay': 20000,
+                'it_nr': 4000,
+                'delay': 1000,
                 'theory_level': 1,
                 'benchmark': 1,
         }
@@ -75,3 +76,7 @@ if __name__ == '__main__':
         my_nociqmc.get_data()
  
         my_nociqmc.plot()
+
+
+
+

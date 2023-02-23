@@ -109,6 +109,7 @@ class System():
 
                 HF = scf.RHF(self.mol).run()
                 self.enuc = HF.scf_summary['nuc']
+                self.E_HF = HF.e_tot
                 self.log.info(f'Restricted HF energy: {HF.e_tot}')
 
         def initialize_walkers(self, mode: str = 'noci') -> None:
@@ -175,7 +176,7 @@ class System():
                         nr = int(self.params['nr_w'] / len(self.reference))
                         for i in range(self.params['nr_scf']):
                                 self.initial[self.refdim * i] = nr
-                
+                        self.E_NOCI = self.E_HF
                 self.log.info(f'Initial Guess:  {self.initial}')
 
         def initialize_sao_hcore(self) -> None:

@@ -62,7 +62,7 @@ class Postprocessor(Propagator):
 
                                 processes[(i,j)] = pool.apply_async(
                                     calc_mat_elem, 
-                                    [occ_i, occ_j, self.cbs, self.enuc, self.sao, self.hcore, self.E_NOCI]
+                                    [occ_i, occ_j, self.cbs, self.enuc, self.sao, self.hcore, self.E_ref]
                                 )
 
                         pool.close()
@@ -82,6 +82,8 @@ class Postprocessor(Propagator):
                 self.ov_eigval, self.ov_eigvec = la.eigh(self.overlap)
                 loc_th = 5e-06
                 indices = (self.ov_eigval > loc_th).nonzero()[0]  
+                
+                #Project onto linearly independent subspace 
                 projector_mat = self.ov_eigvec[:, indices]
                 projected_ov = np.einsum(
                     'ij,jk,kl->il', projector_mat.T, self.overlap, projector_mat
@@ -94,15 +96,25 @@ class Postprocessor(Propagator):
                     projected_ham, 
                     b=np.round(projected_ov,int(-np.log10(ZERO_TOLERANCE))-4), 
                     type=1
-                ) #-> assert overlap elem normalized
+                )
 
-                self.eigvecs = np.einsum('ij,jk->ik',projector_mat,self.eigvecs)
-                self.eigvecs = np.einsum('ij,jk', self.overlap, self.eigvecs)
+                #Project back into the whole, overcomplete space and remove the 0 space 
+                #by applying the overlap
+                self.eigvecs = np.einsum('ij,jk->ik', projector_mat, self.eigvecs)
+#                self.eigvecs = np.einsum('ij,jk->ik', self.overlap, self.eigvecs)
                 self.log.info(
                     f'Overlap Eigs:   {self.ov_eigval}, {self.ov_eigvec}\n'
                 )
-                
+
+                self.projector1 = np.einsum('ij,jk->ik', projector_mat, projector_mat.T)
+
         def good_guess(self) -> np.ndarray:
+                r"""Method for debugging purposes. Generates the lowest
+                eigenvector, such that it may be passed on to a subsequent 
+                NOCI-QMC calculation as an initial guess.
+
+                :returns: The lowest eigen state in determinant basis."""
+
                 ov_eigval, ov_eigvec = la.eigh(self.overlap)
                 indices = (ov_eigval > 1e-10).nonzero()[0]
                 ov_eigval = ov_eigval[indices]
@@ -115,16 +127,26 @@ class Postprocessor(Propagator):
                 return np.einsum('ij,j->i', ov_proj_inv, vec)
 
         def gs_degenerate(self) -> Sequence[int]:
-                r"""Returns a sequence of degenerate indices, corresponing to the ground
-                state energy of our system."""
-                rounded = (np.round(
-                    self.eigvals,int(-np.log10(ZERO_TOLERANCE))-12
-                )
+                r"""Returns a sequence of indices, corresponing to the 
+                eigenvectors that span the ground state energy eigen space 
+                of our system.
+
+                :returns: Sequence of indices specifying the degenerate ground 
+                          state eigen space."""
+                rounded = (
+                    np.round(self.eigvals,int(-np.log10(ZERO_TOLERANCE))-12)
                 )
                 return (rounded == np.min(rounded)).nonzero()[0]
 
         def get_subspace(self, eigval: float, loc_th = 5e-06) -> np.ndarray:
-                r"""Get eigenvectors corresponding to certain eigenvalues"""
+                r"""Get eigenvectors corresponding to certain eigenvalues.
+
+                :param eigval:
+                :param loc_th:
+
+                :returns:
+                """
+                
                 if np.isclose(eigval, 0., atol = loc_th):
                         index = (np.isclose(
                             self.ov_eigval,eigval, atol = loc_th
@@ -201,11 +223,13 @@ class Postprocessor(Propagator):
         def postprocessing(self, benchmark: bool = True) -> None:
                 r"""Takes care of normalisation of our walker arrays, degeneracy and dumps
                 everything to the log file."""
-                #TODO Normalisation
                 if benchmark:
                         self.benchmark()
                 
-                self.coeffs = np.einsum('ij,kj->ik', self.overlap,self.coeffs)
+                #Remove 0 space and normalize
+#                self.coeffs = np.einsum('ij,kj->ik', self.overlap ,self.coeffs)
+                self.coeffs = np.einsum('ij,kj->ik', self.projector1, self.coeffs)
+
                 self.coeffs /= np.sqrt(np.einsum('ki,ki->i', self.coeffs, self.coeffs))
                 self.coeffs = self.coeffs.T
                 
@@ -218,7 +242,7 @@ class Postprocessor(Propagator):
                             Eigvecs:        {self.eigvecs}'
                         )
                         self.log.info(
-                            f'Final FCI energy:  {np.min(self.eigvals) + self.E_NOCI}'
+                            f'Final FCI energy:  {np.min(self.eigvals) + self.E_ref}'
                         )
                         
                         propagator = la.expm(
@@ -233,8 +257,6 @@ class Postprocessor(Propagator):
                 #self.log.info(f'Hamiltonian:    {self.H}')
                 #self.log.info(f'Overlap:        {self.overlap}')
                 #NOTE NEW
-
-#NOTE self.proj_coeff, self.coeffs, self.E_proj, self.Ss
 
 
 def MAE(x: np.ndarray, y: np.ndarray) -> float:
