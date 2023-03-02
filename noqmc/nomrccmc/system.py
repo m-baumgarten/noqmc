@@ -87,7 +87,8 @@ class System():
                 self.reference = generate_scf(
                     mol = self.mol, init_guess_rhf = guess_rhf, 
                     init_guess_uhf = guess_uhf,
-                    workdir = self.params['workdir']
+                    workdir = self.params['workdir'],
+                    localization = self.params['localization']
                 )
                 assert self.params['theory_level'] <= sum(self.reference[0].n_electrons)
 
