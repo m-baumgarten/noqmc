@@ -18,6 +18,15 @@ In order to run noqmc properly, the following python modules are required:
 
 `RevQCMagic` can currently only be obtained by contacting [**Dr Alex Thom**](https://www.ch.cam.ac.uk/person/ajwt3) for access. 
 
+##Before running a Calculation
+In order to allow for a correct interpretation of Löwdin paired overlaps the `RevQCMagic` standards need to be adjusted accordingly.
+This can be done manually in `path/to/RevQCMagic/qcmagic/auxiliary/qcmagic_standards.py`. The following constants need to be changed:
+
+```python
+ZERO_TOLERANCE = 1e-13
+FLOAT_EPS = np.finfo(float).eps
+```
+
 ## Usage
 To perform a simple NOCI-QMC calculation:
 
