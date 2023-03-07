@@ -9,7 +9,6 @@ Based on Booth, Thom and Alavi [2009], and Thom and Head-Gordon [2008]
 """
 
 import numpy as np
-#import scipy.linalg as la
 import sys
 from typing import (
     Tuple, 
@@ -28,7 +27,10 @@ from noqmc.nomrccmc.system import System
 from noqmc.nomrccmc.propagator import calc_mat_elem
 
 class Propagator(System):
-        r"""Class for propagation of the wavefunction/walkers in imaginary time."""
+        r"""
+        Class for propagation of the wavefunction/walkers in imaginary 
+        time.
+        """
 
         def __init__(self, system: System) -> None:
                 r"""Inherits parameters from System object.
@@ -39,19 +41,19 @@ class Propagator(System):
                 self.__dict__.update(system.__dict__)
                 
                 #initialize properties of the propagator 
-                #self.E_proj = np.empty(self.params['it_nr'])
-                self.Ss = np.empty(self.params['it_nr']+1)
                 self.Nws = np.empty(self.params['it_nr'], dtype = int)
+                self.n = []
+                self.curr_it = 0
+                self.E_ref = self.E_HF
+
                 self.coeffs = np.zeros([self.params['it_nr']+1, self.params['dim']], dtype = int)
                 self.coeffs[0,:] = self.initial.copy()
-                self.S = self.Ss[0] = 0
-                self.curr_it = 0
-                self.n = []
 
-                self.E_ref = self.E_HF
-                
                 self.E_proj = np.empty(self.params['it_nr']+1)
                 self.E_proj[0] = self.E_NOCI - self.E_ref
+
+                self.Ss = np.empty(self.params['it_nr']+1)
+                self.S = self.Ss[0] = 0
 
         def E(self) -> None:
                 r"""Calculates energy estimator at current iteration."""
@@ -59,12 +61,16 @@ class Propagator(System):
                 coeffs = self.coeffs[self.curr_it,:]
                 overlap_tmp = np.nan_to_num(self.overlap)
                 H_tmp = np.nan_to_num(self.H)
-                self.index = np.where(np.abs(coeffs) == np.max(np.abs(coeffs)))[0][0] #get index of maximum value 
+                
+                self.index = np.where(
+                        np.abs(coeffs) == np.max(np.abs(coeffs))
+                )[0][0] #get index of maximum value 
+                
                 E_proj = np.einsum('i,i->', H_tmp[self.index,:], coeffs)
                 E_proj /= np.einsum('i,i->', overlap_tmp[self.index, :], coeffs)
                 self.E_proj[self.curr_it+1] = E_proj
 
-        def Shift(self, A: float = None, c: float = 0.03) -> None:
+        def Shift(self) -> None:
                 r"""Updates shift every A-th iteration.
 
                 :param A: Interval of reevaluation of S
@@ -73,9 +79,15 @@ class Propagator(System):
                 N_new = self.Nws[self.curr_it]
                 N_old = self.Nws[self.curr_it - self.params['A']]
                 self.n.append(N_new/N_old)
-                self.S -= c / ( self.params['A'] * self.params['dt'] ) * np.log( N_new / N_old )
+                self.S -= self.params['c'] / (self.params['A'] * self.params['dt']) * np.log(N_new / N_old)
 
-                
+        def Nw(self) -> None:
+                r"""Updates total number of walkers resident outside 
+                the kernel of S."""
+                overlap_tmp = np.nan_to_num(self.overlap) 
+                proj = np.einsum('ij,j->i', overlap_tmp, self.coeffs[self.curr_it, :])
+                self.Nws[self.curr_it] = np.linalg.norm(proj, ord=1)
+
         def population_dynamics(self) -> None:
                 r"""Spawning/Death in one step due to nonorthogonality. 
 		Writes changes to current wavefunction to sp_coeffs."""
@@ -97,7 +109,8 @@ class Propagator(System):
                         )
 
                         for j in set_js:
-                                if not np.isnan(self.H[i,j]):
+                                MAT_ELEM_CACHED = not np.isnan(self.H[i,j])
+                                if MAT_ELEM_CACHED:
                                         continue
                                 det_j = self.get_det(j)
                                 occ_j = det_j.occupied_coefficients
@@ -138,13 +151,15 @@ class Propagator(System):
                 """
                 
                 for i in range(self.params['it_nr']):
-                        self.Nws[self.curr_it] = sum([
-                            int(np.round(np.abs(c))) 
-                            for c in self.coeffs[self.curr_it, :]
-                        ])
-                        if i%self.params['A'] == 0 and i > self.params['delay']: 
-                                #updates the shift in order to 
-                                #stabilize walker populations
+
+                        #Only measure number of walkers outside of ker(S)
+                        self.Nw()
+                        #overlap_tmp = np.nan_to_num(self.overlap) 
+                        #proj = np.einsum('ij,j->i', overlap_tmp, self.coeffs[self.curr_it, :])
+                        #self.Nws[self.curr_it] = np.linalg.norm(proj, ord=1)
+                        
+                        SHIFT_UPDATE = i%self.params['A'] == 0 and i > self.params['delay']
+                        if SHIFT_UPDATE: 
                                 self.Shift()
                         self.Ss[self.curr_it+1] = self.S
                         
