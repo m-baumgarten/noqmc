@@ -223,18 +223,29 @@ class Postprocessor(Propagator):
                             (self.eigvecs, self.get_subspace(0.)), axis=1
                         )
                         #Normalize s.t. A becomes orthogonal
-                        A /= np.sqrt(np.einsum('ki,ki->i', A, A))
+                        #A /= np.sqrt(np.einsum('ki,ki->i', A, A))[np.newaxis, :]
+
 
                         import matplotlib.pyplot as plt
                         #doing it like this would entail that self.coeff are still in nonorth basis, as A is unitary
                         #how do i reliably get adiabatic states in determinant basis?
-                        self.proj_coeff = np.einsum('ji,kj->ki', A, self.coeffs_det_no0)
+                        #self.proj_coeff = np.einsum('ji,kj->ki', A, self.coeffs_det_no0)
+                        self.proj_coeff = np.array([
+                            np.linalg.solve(A, self.coeffs_det_no0[i,:]) 
+                            for i in range(self.coeffs_det_no0.shape[0]) #TODO this is params['it_nr']
+                        ])                        
+
                         self.proj_coeff /= np.sqrt(np.einsum('ki,ki->k', self.proj_coeff, self.proj_coeff))[:, np.newaxis]
                         for i in range(self.proj_coeff.shape[1]):
                                 plt.plot(self.proj_coeff[:,i])
                         plt.savefig('other_proj.png')
                         plt.close()
 
+                        self.safe = np.einsum('ij,kj->ki', A.T, self.safe)
+                        for i in range(self.safe.shape[1]):
+                                plt.plot(self.safe[:,i])
+                        plt.savefig('save.png')
+                        plt.close()
 
                         #test purposes TODO
                         null = self.get_subspace(0.).shape[1]
@@ -263,6 +274,10 @@ class Postprocessor(Propagator):
                         self.benchmark()
                 
                 self.coeffs = self.coeffs.astype('float64')
+                
+                self.safe = np.einsum('ij,kj->ik', self.projector1, self.coeffs)
+                self.safe /= np.sqrt(np.einsum('ki,ki->i', self.safe, self.safe))
+                self.safe = self.safe.T
 
                 #we need this to compare to the benchmark
                 self.coeffs_det_no0 = np.einsum('ij,kj->ik', self.projector1, self.coeffs)

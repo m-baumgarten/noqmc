@@ -20,7 +20,7 @@ DEFAULT_DETERMINISTIC_ARGS = {
         'nr_w': 3000,
         'A': 10,
         'c': 0.01,
-        'it_nr': 1000,
+        'it_nr': 21,
         'delay': 20,
         'theory_level': 2,
         'benchmark': 1,
