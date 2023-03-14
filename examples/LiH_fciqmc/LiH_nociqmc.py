@@ -4,7 +4,7 @@ from pyscf import gto
 import noqmc.nomrciqmc as no
 
 
-def get_init_guess_H2(r: float):
+def get_init_guess_LiH(r: float):
         r""""""
         mol_data = np.load(
                 '../density_matrices/LiH_dms.npy', allow_pickle=True
@@ -51,20 +51,22 @@ if __name__ == '__main__':
         r = 3
         mol = setup_mol(r = r)
 
-        guess_rhf, guess_uhf = get_init_guess_H2(r = r)
+        guess_rhf, guess_uhf = get_init_guess_LiH(r = r)
 
         params = { 
                 'mode': 'noci',
                 'verbosity': 1,
                 'seed': 69420,
-                'dt': 0.001,
+                'dt': 0.01,
                 'nr_w': 4000,
                 'A': 12, 
                 'c': 0.03,
-                'it_nr': 40000,
-                'delay': 10000,
+                'it_nr': 4000,
+                'delay': 2000,
                 'theory_level': 1,
                 'benchmark': 1,
+                'localization': 0,
+                'nr_scf': 3
         }
 
 

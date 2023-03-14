@@ -67,6 +67,7 @@ class System():
                 assert params['delay'] > params['A']
 
                 if 'workdir' not in params: params['workdir'] = 'output'
+                if 'nr_scf' not in params: params['nr_scf'] = 3
                 setup_workdir(params['workdir'])
 
                 self.mol = mol
@@ -84,12 +85,15 @@ class System():
 
         def get_reference(self, guess_rhf: np.ndarray, guess_uhf: np.ndarray) -> Sequence:
                 r""""""
-                self.reference = generate_scf(
-                    mol = self.mol, init_guess_rhf = guess_rhf, 
-                    init_guess_uhf = guess_uhf,
-                    workdir = self.params['workdir'],
-                    localization = self.params['localization']
+                refs = generate_scf(
+                    mol=self.mol, init_guess_rhf=guess_rhf, 
+                    init_guess_uhf=guess_uhf,
+                    workdir=self.params['workdir'],
+                    localization=self.params['localization']
                 )
+                
+                self.reference = refs[:self.params['nr_scf']]
+                
                 assert self.params['theory_level'] <= sum(self.reference[0].n_electrons)
 
                 self.cbs = self.reference[0].configuration.get_subconfiguration("ConvolvedBasisSet")
@@ -149,11 +153,11 @@ class System():
                         try:
                                 self.noci_H = noci_H
                                 self.noci_overlap = noci_overlap
-                                self.noci_eigvals, self.noci_eigvecs = la.eigh(noci_H, b = noci_overlap)
+                                self.noci_eigvals, self.noci_eigvecs = la.eigh(noci_H, b=noci_overlap)
                         except:
                                 self.log.info(
                                     f'No projection onto nonzero subspace implemented (yet).\
-                                    Use distinct reference determinants.'
+                                    Use distinct reference determinants or specify ref mode.'
                                 )
                                 raise NotImplementedError   
 
@@ -280,6 +284,7 @@ class System():
                         self.overlap = np.load('overlap.npy')
                 else:
                         self.H = np.full((self.params['dim'], self.params['dim']), np.nan)
+                        print('DIM:     ', self.params['dim'])
                         self.overlap =  np.full((self.params['dim'], self.params['dim']), np.nan)
         
                 self.H_dict = {}
@@ -302,7 +307,7 @@ class System():
                             coefficient configuration."""
                 new_sd = sd.copy_from(sd, dtype=np.float64)
                 coeffs = new_sd.coefficients
-                for i, tup in enumerate(zip(ex,dex)):
+                for i, tup in enumerate(zip(ex, dex)):
                         ex_spin, dex_spin = tup[0], tup[1]
                         if ex_spin == dex_spin: 
                                 continue

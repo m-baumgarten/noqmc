@@ -29,7 +29,8 @@ from noqmc.utils.excips import (
 from noqmc.nomrccmc.system import System
 
 class Propagator(System):
-        r"""Class for propagation of the wavefunction/walkers in imaginary time."""
+        r"""Class for propagation of the wavefunction/walkers in 
+        imaginary time."""
 
         def __init__(self, system: System) -> None:
                 r"""Inherits parameters from System object.
@@ -80,7 +81,7 @@ class Propagator(System):
                 E_proj /= np.einsum('i,i->', overlap_tmp[index, :], coeffs)
                 self.E_proj[self.curr_it] = E_proj
 
-        def reeval_S(self, A: float = None, c: float = None) -> None:
+        def reeval_S(self, A: float=None, c: float=None) -> None:
                 r"""Updates shift every A-th iteration.
 
                 :param A:
@@ -88,8 +89,8 @@ class Propagator(System):
 		:param dt:"""
                 N_new = self.Nws[self.curr_it]
                 N_old = self.Nws[self.curr_it - self.params['A']]
-                self.n[self.curr_it] = N_new/N_old
-                self.S -= self.constS * np.log( N_new / N_old )
+                self.n[self.curr_it] = N_new / N_old
+                self.S -= self.constS * np.log(N_new / N_old)
 
 
         def cluster_generation(self, nr_ex: int, ss: Sequence[int],
@@ -104,8 +105,8 @@ class Propagator(System):
                         #generate first cluster & check whether it is 0 
                         if s:                                              
                                 cluster_index = np.random.choice(
-                                    np.arange(1,self.refdim), p = p_interm, 
-                                    replace=True, size = s
+                                    np.arange(1,self.refdim), p=p_interm, 
+                                    replace=True, size=s
                                 )
                                 p_clust = np.prod(p_interm[cluster_index-1])
                         else:                                              
@@ -117,13 +118,11 @@ class Propagator(System):
                             for index in cluster_index + scf * self.refdim
                         ]
                         cluster_i = [
-                            Excitor(excitation = ex, 
-                                excips = coeffs_scf[scf,index]
-                            ) 
+                            Excitor(excitation=ex, excips=coeffs_scf[scf,index]) 
                             for ex, index in zip(cluster_i,cluster_index)
                         ]
                                                                                    
-                        cluster_i = Cluster(excitors = cluster_i)          
+                        cluster_i = Cluster(excitors=cluster_i)          
                         cl_ex, _ = cluster_i.collapse() #returns None, False if cluster is 0
                                 
                         if cl_ex is None:                                  
@@ -149,10 +148,11 @@ class Propagator(System):
                                 occ_i = det_i.occupied_coefficients
                                 det_j = self.get_det(j)
                                 occ_j = det_j.occupied_coefficients
+                                
                                 H_ij, _, overlap_ij, _ = calc_mat_elem(
-                                    occ_i = occ_i, occ_j = occ_j, cbs = self.cbs, 
-                                    enuc = self.enuc, sao = self.sao, 
-                                    hcore = self.hcore, E_ref = self.E_ref
+                                    occ_i=occ_i, occ_j=occ_j, cbs=self.cbs, 
+                                    enuc=self.enuc, sao=self.sao, 
+                                    hcore=self.hcore, E_ref=self.E_ref
                                 )
                                 self.H[ii,j] = H_ij
                                 self.overlap[ii,j] = overlap_ij
@@ -167,10 +167,11 @@ class Propagator(System):
                                 occ_i = det_i.occupied_coefficients
                                 det_j = self.get_det(j)
                                 occ_j = det_j.occupied_coefficients
+                                
                                 H_ij, _, overlap_ij, _ = calc_mat_elem(
-                                    occ_i = occ_i, occ_j = occ_j, cbs = self.cbs, 
-                                    enuc = self.enuc, sao = self.sao, 
-                                    hcore = self.hcore, E_ref = self.E_ref
+                                    occ_i=occ_i, occ_j=occ_j, cbs=self.cbs, 
+                                    enuc=self.enuc, sao=self.sao, 
+                                    hcore=self.hcore, E_ref=self.E_ref
                                 )
                                 self.H_dict[(cl_nr, j)] = (H_ij, overlap_ij)
                         else:
@@ -233,41 +234,42 @@ class Propagator(System):
                 #TODO no need to get p_coeff_scf, normalization of p_interm can be done with nr_excips_compl
 
                 p_excit = 1/self.params['dim']
-                #iterate over SCF sol. -> this way we pick determiants with probabilities weighted by walker pops on their SCF sol.
-                
+
+                #iterate over SCF sol. -> this way we pick determiants 
+                #with probabilities weighted by walker pops on their SCF sol.
                 for i, nr_ex in enumerate(nr_excips_scf):
                         #pick cluster sizes -> iterate over them
                         p_sel = nr_ex
                         ss = np.random.choice(
-                            a = range(ss_scf[i]+1), p = p_dens_scf[i], 
-                            size = nr_ex
+                                a = range(ss_scf[i]+1), p = p_dens_scf[i], 
+                                size = nr_ex
                         ) #could do this with expectation value -> no unique needed
 
                         p_interm = 0
                         if ss_scf[i] != 0:
                                 p_interm = p_coeff_scf[i][1:].copy()
-                                p_interm /= np.linalg.norm(p_interm, ord = 1)
+                                p_interm /= np.linalg.norm(p_interm, ord=1)
 
-                        clusters = self.cluster_generation(nr_ex = nr_ex, 
-                            ss = ss, p_interm = p_interm, scf = i, 
-                            coeffs_scf = coeffs_scf
+                        clusters = self.cluster_generation(
+                                nr_ex=nr_ex, ss=ss, p_interm=p_interm, 
+                                scf=i, coeffs_scf=coeffs_scf
                         )
                         
                         cluster_numbers = np.array([
-                            exstr2number(exstr = cl.excitation, 
-                                 shape = self.shape, 
-                                 ex_lvl = np.sum(self.reference[0].n_electrons)
-                            ) 
-                            for cl in clusters
+                                exstr2number(
+                                        exstr=cl.excitation, shape=self.shape, 
+                                        ex_lvl=np.sum(self.reference[0].n_electrons)
+                                ) 
+                                for cl in clusters
                         ])
                         
                         clusters_len = len(clusters)
                         index_j = np.random.randint(0, self.params['dim'], 
-                            size = clusters_len
-                        )
+                                                    size=clusters_len)
                         rand_vars = np.random.random(size = clusters_len)
 
-                        for cluster, cl_nr, j, r in zip(clusters, cluster_numbers, index_j, rand_vars): #comes with cluster.excitation, cluster.sign, cluster.p
+                        for cluster, cl_nr, j, r in zip(clusters, cluster_numbers, index_j, rand_vars): 
+                        #comes with cluster.excitation, cluster.sign, cluster.p
                                 s = cluster.size
                                 p_size = p_dens_scf[i][s]
                                 p_clust = cluster.p * np.math.factorial(s)
@@ -282,6 +284,7 @@ class Propagator(System):
                                 H_ij, overlap_ij = self.cache_matelem(cluster, j, cl_nr)
 
                                 p_spawn = self.params['dt'] * (H_ij - self.S * overlap_ij) * the_whole_of_p * cluster.sign
+                                
                                 s_int = int(p_spawn)
                                 b = p_spawn - s_int
                                 s_int += (r < np.abs(b)) * np.sign(b)
@@ -299,8 +302,7 @@ class Propagator(System):
                 )
 
         def run(self) -> None:
-                r"""Executes the population dynamics algorithm.
-                """
+                r"""Executes the population dynamics algorithm."""
                 
                 for i in range(self.params['it_nr']):
                         self.Nws[self.curr_it] = sum([
@@ -328,12 +330,13 @@ def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet,
         r"""Outsourced calculation of Hamiltonian and 
         overlap matrix elements to parallelize code."""
         H_ij, H_ji = calc_hamiltonian(cws = occ_i, cxs = occ_j, cbs = cbs, 
-            enuc = enuc, holo = False, _sao = sao, _hcore = hcore
-        )
+                                      enuc = enuc, holo = False, _sao = sao, 
+                                      _hcore = hcore)
         
-        overlap_ij, overlap_ji = calc_overlap(
-            cws = occ_i, cxs = occ_j, cbs = cbs, holo = False, _sao = sao
-        )
+        overlap_ij, overlap_ji = calc_overlap(cws = occ_i, cxs = occ_j, 
+                                              cbs = cbs, holo = False, 
+                                              _sao = sao)
+
         H_ij -= E_ref * overlap_ij
         H_ji -= E_ref * overlap_ji
 

@@ -53,6 +53,10 @@ class Propagator(System):
                     [self.params['it_nr']+1, self.params['dim']]
                 )
                 self.coeffs[0,:] = norm(self.initial.copy())
+                
+                self.coeffs[0,:] = np.random.random(722)
+                self.coeffs[0,:] /= np.linalg.norm(self.coeffs[0,:])
+                
                 self.S = self.Ss[0] = 0
                 self.curr_it = 0
                 self.n = []

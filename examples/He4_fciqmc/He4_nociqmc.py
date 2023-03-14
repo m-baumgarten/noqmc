@@ -42,7 +42,7 @@ if __name__ == '__main__':
                 'nr_w': 8000,
                 'A': 12, 
                 'c': 0.01,
-                'it_nr': 10000,
+                'it_nr': 8000,
                 'delay': 4000,
                 'theory_level': 2,
                 'benchmark': 1,

@@ -15,6 +15,7 @@ class Parser():
                 r"""Extracts raw data from input file."""
                 with open(filename, 'r') as f:
                         lines = f.readlines()
+                #use partition('#') and rstrip here instead
                 lines = [line.replace('\n', '') for line in lines if not (line.startswith('#') or line == '\n')]
                 lines = [line.split(' ') for line in lines]
                 for line in lines:

@@ -3,7 +3,7 @@ import numpy as np
 from noqmc.utils.utilities import Parser
 from noqmc.utils.plot import Plot 
 
-from noqmc.deterministic.system import System
+from noqmc.nomrccmc.system import System
 from noqmc.deterministic.propagator import Propagator
 from noqmc.nomrccmc.postprocessor import Postprocessor
 from noqmc.nomrccmc.statistics import Statistics
@@ -21,7 +21,7 @@ DEFAULT_DETERMINISTIC_ARGS = {
         'A': 10,
         'c': 0.01,
         'it_nr': 1000,
-        'delay': 200,
+        'delay': 20,
         'theory_level': 2,
         'benchmark': 1,
         'localization': 0,
@@ -86,7 +86,18 @@ class Deterministic(Propagator):
 if __name__ == '__main__':
         mol = gto.M(atom=[['H', 0, 0, 0], ['H', 0, 0, 1.8]], 
                     basis='sto-3g', unit='Bohr')
-        
+
+        basis = '6-31g*'
+        mol = gto.M(
+                atom=[["He", 0., 0., 0.],
+                      ["He", 0., 0., 2.5 ],
+                      ["He", 0., 0., 5.],
+                      ["He", 0., 0., 7.5]],
+                basis = basis, verbose = 0,
+                unit = 'Angstrom'
+        )
+
+
         my_nociqmc = Deterministic(mol)
         my_nociqmc.run()
         my_nociqmc.get_data()

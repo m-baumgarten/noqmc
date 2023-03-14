@@ -97,7 +97,7 @@ def generate_scf(mol, init_guess_rhf = None, init_guess_uhf = None, workdir = 'o
 
         from_scf(rhf, os.path.join(workdir, 'rhf.molden'))
         from_scf(uhf, os.path.join(workdir, 'uhf.molden'))
-        
+
         if localization:
                 for sol in [rhf, uhf]:
                         old = sol.mo_coeff.copy()
@@ -107,6 +107,9 @@ def generate_scf(mol, init_guess_rhf = None, init_guess_uhf = None, workdir = 'o
                         #for excitation generation between locally 
                         #adjacent areas.
                         a = sol.mulliken_pop()
+                        print(a)
+
+        #MO_AO_MAP = {i: np.where(mo == np.max(mo))[0][0] for i, mo in enumerate(rhf.mo_coeff.T)}
 
         sd_rhf = scf_to_state(rhf)
         rhf_occ = [sd_rhf.occupied_coefficients[0]] * 2
@@ -114,7 +117,12 @@ def generate_scf(mol, init_guess_rhf = None, init_guess_uhf = None, workdir = 'o
         sd_new_rhf = SingleDeterminant(n_electrons = sd_rhf.n_electrons * 2, 
                                    config = sd_rhf.configuration, holo = False,
                                    full_coeffs = rhf_coeffs)
-    
+   
+        double_rhf = False #True
+        if double_rhf:
+                sd_rhf2 = sd_rhf.copy_from(sd_new_rhf, dtype=np.float64)
+                return [sd_new_rhf, sd_rhf2]
+
         sd_uhf1 = scf_to_state(uhf)
         sd_uhf2 = sd_uhf1.copy_from(sd_uhf1, dtype=np.float64)
         sd_uhf2.coefficients[1], sd_uhf2.coefficients[0] = sd_uhf2.coefficients[0], sd_uhf2.coefficients[1]

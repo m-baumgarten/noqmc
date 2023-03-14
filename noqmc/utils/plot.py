@@ -14,7 +14,9 @@ SUPPORTED_DATA = [
         'coeffs',
         'proj_coeff',
         'Nws',
-        'nullspace_evol'
+        'nullspace_evol',
+        'coeffs_ad',
+        'coeffs_det_no0'
 ]
 
 class Plot():
@@ -44,7 +46,8 @@ class Plot():
                 return data
 
         def setup_figure(self, data: dict) -> None:
-                self.rows, rest = divmod(len(data), self.cols)
+                #self.rows, rest = divmod(len(data), self.cols)
+                self.rows = 2
                 #if rest >= 0: self.rows += 1
                 
                 self.fig, self.ax = plt.subplots(self.rows, self.cols, figsize=(14,7.5), dpi = 150)
@@ -55,7 +58,7 @@ class Plot():
                 x_axis = np.arange(params['it_nr'] + 1) * params['dt']
 
                 ax.plot(x_axis, self.data['E_proj'], label=r'$E(\tau)$')
-                ax.plot(x_axis, self.data['Ss'], label=r'$S(\tau)$')
+#                ax.plot(x_axis, self.data['Ss'], label=r'$S(\tau)$')
                 
                 if self.eigvals is not None:
                         e_corr = np.min(self.eigvals)
@@ -68,13 +71,15 @@ class Plot():
                 ax.legend(frameon=False)
 
         def plot_coeffs(self, ax1, ax2) -> None:
+                key_coeff = 'coeffs_det_no0'
+                key_coeff_ad = 'coeffs_ad'
                 params = self.params
                 x_axis = np.arange(params['it_nr'] + 1) * params['dt']
                 
                 ##DETERMINANTS
 #                for i in range(self.max_lines):
                 for i in range(params['dim']):        
-                        ax1.plot(x_axis, self.data['coeffs'][:,i], color = f'C{i}', 
+                        ax1.plot(x_axis, self.data[key_coeff][:,i], color = f'C{i}', 
                                 label=fr'$\langle D_{i}| \Psi \rangle$' if i <= self.max_lines else None
                         )
                         if self.eigvals is not None:
@@ -87,12 +92,11 @@ class Plot():
                 
                 ##ADIABATIC
                 if self.eigvals is None: return None
-                        
-                for i in range(params['dim']):
-                        ax2.plot(x_axis,
-                                self.data['proj_coeff'][:,i], color = f'C{i}', 
-                                label=f'{i}' if i <= self.max_lines else None
-                        )
+                print(self.data[key_coeff_ad].shape)                       
+                for i in range(self.data[key_coeff_ad].shape[1]):
+                        ax2.plot(x_axis, self.data[key_coeff_ad][:,i], 
+                                 color = f'C{i}', 
+                                 label=f'{i}' if i <= self.max_lines else None)
 
                 ax2.set_ylabel('Contrib. to Coeff')
                 ax2.set_xlabel(r'$\tau$')
@@ -143,7 +147,7 @@ class Plot():
                 self.plot_energy(self.ax[0,1])
                 self.plot_coeffs(self.ax[0,0], self.ax[1,0])
                 self.plot_walkers(self.ax[0,2])
-                self.plot_stderr(self.ax[1,1])
+#                self.plot_stderr(self.ax[1,1])
                 self.plot_nullspace(self.ax[1,2])
 #                self.ax[1,2].set_axis_off()
                 plt.savefig('tmp.png')

@@ -56,8 +56,7 @@ class NOCIQMC(Propagator):
                 return self.prop
 
         def initialize_references(self, guess_rhf: np.ndarray = None, 
-                guess_uhf: np.ndarray = None
-                ) -> None:
+                                  guess_uhf: np.ndarray = None) -> None:
                 r"""Generates the SCF solutions required to run the population
                 dynamics. Currently, 3 SCF solutions are generated: 1 RHF and 
                 2 UHF solutions. However, to generalize the code, just change
@@ -71,7 +70,7 @@ class NOCIQMC(Propagator):
                 self.system.initialize()
                 self.initialized = True
 
-        def get_data(self):
+        def get_data(self) -> None:
                 r"""After running the population dynamics, get_data() will be
                 able to extract the Shift, coefficients, projected energy,
                 matrix elements and an error analysis."""
@@ -90,8 +89,9 @@ class NOCIQMC(Propagator):
                 plot.plot_data()
 
 if __name__ == '__main__':
-        mol = gto.M(atom = [['H', 0, 0, 0], ['H', 0, 0, 1.8]], 
-            basis = 'sto-3g', unit = 'Angstrom')
+        mol = gto.M(atom=[['H', 0, 0, 0], ['H', 0, 0, 1.8]], 
+                    basis='sto-3g', unit='Angstrom')
         
         my_nociqmc = NOCIQMC(mol)
         my_nociqmc.run()
+
