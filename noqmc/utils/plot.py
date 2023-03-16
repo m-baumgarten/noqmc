@@ -138,7 +138,18 @@ class Plot():
                 ax.set_ylabel('0-space components')
                 ax.set_xlabel(r'$\tau$')
                 ax.legend(frameon=False)
-               
+
+        def plot_l1(self) -> None:
+                r""""""
+                l1_tot = [np.linalg.norm(self.data['coeffs'][i,:], ord=1) for i in range(self.coeffs.shape[0])]
+                l1_sub = [np.linalg.norm(self.data['coeffs'][i,:] - self.data['nullspace_evol'][i,:], ord=1) for i in range(self.data['coeffs'].shape[0])]
+                plt.plot(l1_tot, label='Total')
+                plt.plot(l1_sub, label='w/o ker(S)')
+                plt.legend(frameon=False)
+                plt.savefig('l1.png')
+                plt.close()
+
+
 
         def plot_data(self) -> None:
                 r""""""

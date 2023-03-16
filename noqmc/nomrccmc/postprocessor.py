@@ -114,6 +114,8 @@ class Postprocessor(Propagator):
 
                 self.projector1 = np.einsum('ij,jk->ik', projector_mat, projector_mat.T)
                 self.projector2 = np.einsum('ij,jk->ik', self.eigvecs, self.eigvecs.T)
+                self.projector3 = np.einsum('ij,jk->ik', self.ov_eigvec, self.ov_eigvec.T)
+                self.eigvecs_alt = np.einsum('ij,jk->ik', self.ov_eigvec, self.eigvecs)
 
         def good_guess(self) -> np.ndarray:
                 r"""Method for debugging purposes. Generates the lowest
@@ -222,50 +224,46 @@ class Postprocessor(Propagator):
                         A = np.concatenate(
                             (self.eigvecs, self.get_subspace(0.)), axis=1
                         )
-                        #Normalize s.t. A becomes orthogonal
-                        #A /= np.sqrt(np.einsum('ki,ki->i', A, A))[np.newaxis, :]
 
-
-                        import matplotlib.pyplot as plt
-                        #doing it like this would entail that self.coeff are still in nonorth basis, as A is unitary
-                        #how do i reliably get adiabatic states in determinant basis?
-                        #self.proj_coeff = np.einsum('ji,kj->ki', A, self.coeffs_det_no0)
-                        self.proj_coeff = np.array([
-                            np.linalg.solve(A, self.coeffs_det_no0[i,:]) 
-                            for i in range(self.coeffs_det_no0.shape[0]) #TODO this is params['it_nr']
-                        ])                        
-
+                        #Alternative way to create the correct adiabatic contributions
+                        self.proj_coeff = np.einsum('ij,kj->ki', np.linalg.inv(A), self.coeffs_det_no0)
                         self.proj_coeff /= np.sqrt(np.einsum('ki,ki->k', self.proj_coeff, self.proj_coeff))[:, np.newaxis]
-                        for i in range(self.proj_coeff.shape[1]):
-                                plt.plot(self.proj_coeff[:,i])
-                        plt.savefig('other_proj.png')
-                        plt.close()
+        
+        def alternative_0space_contribution(self) -> None:
+                r"""Creates plots for 0 space contribution, not via projection onto
+                0 space but transformin into adiabatic basis, and backtransforming the 
+                adiabatic 0 space components into the overcomplete determinant basis.
+                """
+                #Define adiabatic basis
+                A = np.concatenate(
+                        (self.eigvecs, self.get_subspace(0.)), axis=1
+                )
+ 
+                #move from overcomplete determinant basis to adiabatic basis
+                proj_with_0 = np.einsum('ij,kj->ki', np.linalg.inv(A), self.coeffs)
+                proj_with_0 /= np.sqrt(np.einsum('ki,ki->k', proj_with_0, proj_with_0))[:, np.newaxis]
+                
+                #build adiabatic contributions of zero space components
+                null = self.get_subspace(0.).shape[1]
+                not_null = self.eigvecs.shape[1]
+                self.null_adiab = proj_with_0[:, -null:].copy()
+                self.null_zeros = np.zeros((self.params['it_nr']+1, not_null))                
+                self.null_adiab = np.concatenate((self.null_zeros, self.null_adiab), axis = 1)
+                
+                #back transform adiabatic contirbutions to overcomplete determinant basis
+                self.nullspace_evol2 = np.einsum('ij,jk->ik', A, self.null_adiab.T).T
+                        
+                import matplotlib.pyplot as plt
+                for i in range(self.nullspace_evol2.shape[1]):
+                        plt.plot(self.nullspace_evol2[:,i])
+                plt.savefig('new_zero.png')
+                plt.close()
 
-                        self.safe = np.einsum('ij,kj->ki', A.T, self.safe)
-                        for i in range(self.safe.shape[1]):
-                                plt.plot(self.safe[:,i])
-                        plt.savefig('save.png')
-                        plt.close()
-
-                        #test purposes TODO
-                        null = self.get_subspace(0.).shape[1]
-                        not_null = self.eigvecs.shape[1]
-                        self.null_adiab = self.proj_coeff[:, -null:].copy()
-                        self.null_zeros = np.zeros((self.params['it_nr']+1, not_null))
-                        print('nullspace shapes:        ', self.null_adiab.shape, self.null_zeros.shape)
-                        self.null_adiab = np.concatenate((self.null_zeros, self.null_adiab), axis = 1)
-                        self.nullspace_evol2 = np.einsum('ij,jk->ik', A, self.null_adiab.T).T
-
-                        print('Shapes:  ')
-                        print(' null_adiab:     ', self.null_adiab.shape)
-                        print(' nullspace_evol: ', self.nullspace_evol.shape)
-
-                        for i in range(self.nullspace_evol2.shape[1]):
-                                plt.plot(self.nullspace_evol2[:,i])
-                        plt.savefig('new_zero.png')
-                        plt.close()
-
-                        print('test in kernel:  ', np.einsum('ij,jk->ik', self.overlap, self.nullspace_evol.T))
+                for i in range(proj_with_0.shape[1]):
+                        plt.plot(proj_with_0[:,i])
+                plt.savefig('adiab.png')
+                plt.close()
+                
                         
         def postprocessing(self, benchmark: bool = True) -> None:
                 r"""Takes care of normalisation of our walker arrays, degeneracy and dumps
@@ -274,10 +272,6 @@ class Postprocessor(Propagator):
                         self.benchmark()
                 
                 self.coeffs = self.coeffs.astype('float64')
-                
-                self.safe = np.einsum('ij,kj->ik', self.projector1, self.coeffs)
-                self.safe /= np.sqrt(np.einsum('ki,ki->i', self.safe, self.safe))
-                self.safe = self.safe.T
 
                 #we need this to compare to the benchmark
                 self.coeffs_det_no0 = np.einsum('ij,kj->ik', self.projector1, self.coeffs)
@@ -288,39 +282,17 @@ class Postprocessor(Propagator):
                 self.coeffs_ad /= np.sqrt(np.einsum('ki,ki->i', self.coeffs_ad, self.coeffs_ad))
                 self.coeffs_ad = self.coeffs_ad.T
 
-                print('Shapes coeff:')
-                print(' coeffs:         ', self.coeffs.shape, np.linalg.norm(self.coeffs[-1,:]))
-                print(' coeffs_det_no0: ', self.coeffs_det_no0.shape, np.linalg.norm(self.coeffs_det_no0[-1,:]))
-                print(' coeffs_ad:      ', self.coeffs_ad.shape, np.linalg.norm(self.coeffs_ad[-1,:]))
-
-
- #               self.coeffs = np.einsum('ij,kj->ik', self.projector2, self.coeffs)
-
-                #self.coeffs = self.coeffs.T
-                
-              #  self.coeffs /= np.sqrt(np.einsum('ki,ki->i', self.coeffs, self.coeffs))
-#                self.coeffs = self.coeffs.T
-#                for i in range(self.coeffs.shape[1]):
-#                        plt.plot(self.coeffs[:,i])
-#                plt.savefig('b.png')
-
-                #only for print purposes
-                #proj_overlap = np.einsum('ij,jk,kl->il', self.projector1.T, self.overlap, self.projector1)
-                #print('eig?:    ', np.einsum('ij,j->i', proj_overlap, self.coeffs[0,:]), self.coeffs[0,:])
-
-                #we are not yet working with the projected coefficients, meaning in an orthogonal basis
-#                self.nullspace_evol = np.einsum('ij,kj->ik', np.eye(self.params['dim']) - self.projector1, self.old_coeffs)
                 null_proj = np.einsum('ij,jk->ik', self.get_subspace(0.), self.get_subspace(0.).T)
                 self.nullspace_evol = np.einsum('ij,kj->ki', null_proj, self.coeffs)
-                #self.nullspace_evol /= np.sqrt(np.einsum('ki,ki->k', self.nullspace_evol, self.nullspace_evol))[:,np.newaxis]
-                
-                #self.nullspace_evol /= np.sqrt(np.einsum('ki,ki->i', self.nullspace_evol, self.nullspace_evol))
-                #self.nullspace_evol = self.nullspace_evol.T
-                #assert that this nullspace is actually in ker(S)
-                #print('EYYYYY:  ', np.einsum('ij,jk->ik', self.overlap, self.nullspace_evol.T))
-
-                #TODO WE CANNOT USE ORTHOGONAL PROJECTORS HERE AS WE SOLVE Ax=b in self.degeneracy_treatment
-                #-> coeffs arent yet correctly projected
+               
+#                import matplotlib.pyplot as plt
+#                l1_tot = [np.linalg.norm(self.coeffs[i,:], ord=1) for i in range(self.coeffs.shape[0])]
+#                l1_sub = [np.linalg.norm(self.coeffs[i,:] - self.nullspace_evol[i,:], ord=1) for i in range(self.coeffs.shape[0])]
+#                plt.plot(l1_tot)
+#                plt.plot(l1_sub)
+#                plt.legend()
+#                plt.savefig('l1.png')
+#                plt.close()
 
                 #Selection of ground state from degenerate eigenvectors
                 if benchmark:
