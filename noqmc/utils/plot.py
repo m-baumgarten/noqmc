@@ -1,4 +1,5 @@
 import numpy as np
+import os 
 import matplotlib.pyplot as plt
 from matplotlib import rc
 
@@ -10,7 +11,8 @@ rc('text', usetex=True)
 SUPPORTED_DATA = [
         'E_proj',
         'Ss',
-        'data_summary',
+        'data_summary_S',
+        'data_summary_E',
         'coeffs',
         'proj_coeff',
         'Nws',
@@ -18,6 +20,7 @@ SUPPORTED_DATA = [
         'coeffs_ad',
         'coeffs_det_no0'
 ]
+
 
 class Plot():
         r"""Data visualisation class. Takes data from Postprocessor and plots
@@ -31,6 +34,7 @@ class Plot():
                 r"""Reads in data from a Postprocessor, which contains information
                 on the population dynamics."""
                 self.params = postpr.params
+                self.wd = lambda x: os.path.join(self.params['workdir'], x)
                 self.__dict__.update(
                         {key: val 
                         for key,val in postpr.__dict__.items() 
@@ -58,7 +62,7 @@ class Plot():
                 x_axis = np.arange(params['it_nr'] + 1) * params['dt']
 
                 ax.plot(x_axis, self.data['E_proj'], label=r'$E(\tau)$')
-#                ax.plot(x_axis, self.data['Ss'], label=r'$S(\tau)$')
+                ax.plot(x_axis, self.data['Ss'], label=r'$S(\tau)$')
                 
                 if self.eigvals is not None:
                         e_corr = np.min(self.eigvals)
@@ -69,6 +73,9 @@ class Plot():
                 ax.set_ylabel(r'$E / \mathrm{a.u.}$')
                 ax.set_xlabel(r'$\tau$')
                 ax.legend(frameon=False)
+
+                np.save(self.wd('E_proj.npy'), self.data['E_proj'])
+                np.save(self.wd('Ss.npy'), self.data['Ss'])
 
         def plot_coeffs(self, ax1, ax2) -> None:
                 key_coeff = 'coeffs_det_no0'
@@ -102,6 +109,9 @@ class Plot():
                 ax2.set_xlabel(r'$\tau$')
                 ax2.legend(frameon=False)
                 
+                np.save(self.wd('coeffs.npy'), self.data[key_coeff])
+                np.save(self.wd('coeffs_ad.npy'), self.data[key_coeff_ad])
+
         def plot_walkers(self, ax) -> None:
                 x_axis = np.arange(self.params['it_nr']) * self.params['dt']
                 
@@ -109,8 +119,10 @@ class Plot():
                 ax.set_xlabel(r'$\tau$')
                 ax.set_ylabel(r'$N_w$')      
 
+                np.save(self.wd('Nws.npy'), self.data['Nws'])
+
         def plot_stderr(self, ax) -> None:
-                data = self.data['data_summary']
+                data = self.data['data_summary_S']
                 x_axis = np.arange(len(data))
                 stderr = [block[4] for block in data]
                 stderr_err = [block[5] for block in data]
@@ -118,6 +130,9 @@ class Plot():
                 ax.errorbar(x_axis, stderr, yerr = stderr_err)
                 ax.set_xlabel(r'Block size log$_2(n)$')
                 ax.set_ylabel(r'Standard deviation / $\mathrm{(a.u.)}^2$')
+
+                np.save(self.wd('stderr.npy'), np.array(stderr))
+                np.save(self.wd('stderr_err.npy'), np.array(stderr_err))
 
         def plot_shoulder(self, ax) -> None:
                 pass
@@ -139,17 +154,20 @@ class Plot():
                 ax.set_xlabel(r'$\tau$')
                 ax.legend(frameon=False)
 
+                np.save(self.wd('nullspace.npy'), self.data['nullspace_evol'])
+
         def plot_l1(self) -> None:
                 r""""""
-                l1_tot = [np.linalg.norm(self.data['coeffs'][i,:], ord=1) for i in range(self.coeffs.shape[0])]
+                x_axis = np.arange(self.params['it_nr'] + 1) * self.params['dt']
+                l1_tot = [np.linalg.norm(self.data['coeffs'][i,:], ord=1) for i in range(self.data['coeffs'].shape[0])]
                 l1_sub = [np.linalg.norm(self.data['coeffs'][i,:] - self.data['nullspace_evol'][i,:], ord=1) for i in range(self.data['coeffs'].shape[0])]
-                plt.plot(l1_tot, label='Total')
-                plt.plot(l1_sub, label='w/o ker(S)')
+                plt.plot(x_axis, l1_tot, label='Total')
+                plt.plot(x_axis, l1_sub, label='w/o ker(S)')
                 plt.legend(frameon=False)
+                plt.xlabel(r'$\tau$')
+                plt.ylabel(r'$l_1 \mathrm{ Norm}$')
                 plt.savefig('l1.png')
                 plt.close()
-
-
 
         def plot_data(self) -> None:
                 r""""""

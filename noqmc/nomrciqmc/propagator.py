@@ -141,22 +141,19 @@ class Propagator(System):
                 self.coeffs[self.curr_it+1, :] = sp_coeffs
                 self.coeffs[self.curr_it+1, :] += self.coeffs[self.curr_it, :]
 
-                print(f'{self.curr_it} new spawns:      ', 
-                    self.coeffs[self.curr_it+1, :], 
-                    np.linalg.norm(sp_coeffs, ord = 1), self.S 
-                )
+                if self.params['verbosity']:
+                        print(f'{self.curr_it} new spawns:      ',
+                            np.linalg.norm(self.coeffs[self.curr_it+1, :], ord = 1), 
+                            self.S 
+                        )
 
         def run(self) -> None:
                 r"""Executes the FCIQMC algorithm.
                 """
                 
                 for i in range(self.params['it_nr']):
-
                         #Only measure number of walkers outside of ker(S)
                         self.Nw()
-                        #overlap_tmp = np.nan_to_num(self.overlap) 
-                        #proj = np.einsum('ij,j->i', overlap_tmp, self.coeffs[self.curr_it, :])
-                        #self.Nws[self.curr_it] = np.linalg.norm(proj, ord=1)
                         
                         SHIFT_UPDATE = i%self.params['A'] == 0 and i > self.params['delay']
                         if SHIFT_UPDATE: 

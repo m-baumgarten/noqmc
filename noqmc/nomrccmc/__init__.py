@@ -1,6 +1,11 @@
+import logging
+import os
 import numpy as np
 
-from noqmc.utils.utilities import Parser
+from noqmc.utils.utilities import (
+        Parser,
+        setup_workdir,
+)
 
 from noqmc.nomrccmc.system import System
 from noqmc.nomrccmc.propagator import Propagator
@@ -43,24 +48,37 @@ class NOCCMC(Propagator):
                 else: params = DEFAULT_CCMC_ARGS 
                
                 params.update(kwargs)
-                if not all(key in DEFAULT_CCMC_ARGS for key in params):
+                if not all(key in DEFAULT_CCMC_ARGS for key in kwargs):
                         raise NotImplementedError
+                if 'workdir' not in params: params['workdir'] = 'output'
+                if 'nr_scf' not in params: params['nr_scf'] = 3
+                setup_workdir(params['workdir'])
 
+                self.params = params                
+                self.initialize_log()
                 self.mol = mol
                 self.system = System(mol = mol, params = params)
                 self.initialized = False
 
-                
+        def initialize_log() -> None:
+                filename = os.path.join(self.params['workdir'], 
+                                        f'noccmc_{os.getpid()}.log')
+                logging.basicConfig(
+                        filename=filename, 
+                        format='%(levelname)s: %(message)s', 
+                        level=logging.INFO
+                )                
+               
         def run(self) -> Propagator:
                 r"""Executes the population dynamics algorithm."""
                 if not self.initialized: self.initialise_references() 
                 self.prop = Propagator(self.system)
                 self.prop.run()
+                self.__dict__.update(self.prop.__dict__)  
                 return self.prop
 
-        def initialise_references(self, guess_rhf: np.ndarray = None, 
-                guess_uhf: np.ndarray = None
-                ):
+        def initialize_references(self, guess_rhf: np.ndarray = None, 
+                                  guess_uhf: np.ndarray = None) -> None:
                 r"""Generates the SCF solutions required to run the population
                 dynamics. Currently, 3 SCF solutions are generated: 1 RHF and 
                 2 UHF solutions. However, to generalize the code, just change
@@ -69,22 +87,46 @@ class NOCCMC(Propagator):
                 :param guess_rhf: 
                 :param guess_uhf:"""
                 self.system.get_reference(
-                    guess_rhf = guess_rhf, guess_uhf = guess_uhf
+                    guess_rhf=guess_rhf, guess_uhf=guess_uhf
                 )
                 self.system.initialize()
                 self.initialized = True
 
-        def get_data(self):
+        def get_data(self) -> None:
                 r"""After running the population dynamics, get_data() will be
                 able to extract the Shift, coefficients, projected energy,
                 matrix elements and an error analysis."""
                 self.postpr = Postprocessor(self.prop)
-                self.postpr.postprocessing(
-                        benchmark = self.params['benchmark']
-                )
+                self.postpr.postprocessing(benchmark = self.params['benchmark'])
 
-                self.stat = Statistics(self.prop.Ss, self.params)
-                self.stat.analyse()
+                self.statS = Statistics(self.prop.Ss, self.params)
+                self.statS.blockS = self.statS.analyse()
+                self.postpr.data_summary_S = self.statS.data_summary
+
+                self.statE = Statistics(self.prop.E_proj, self.params)
+                self.statE.blockE = self.statE.analyse()
+                self.postpr.data_summary_E = self.statE.data_summary
+
+                final_vals = np.array([self.statS.data_summary.mean, self.statS.data_summary.std_err,
+                        self.statE.data_summary.mean, self.statE.data_summary.std_err])
+                np.save('final_vals.npy', final_vals)
+
+        def plot(self) -> None:
+                from noqmc.utils.plot import Plot
+                plot = Plot()
+                data = plot.add_data(self.postpr)
+                plot.setup_figure(data)
+                #plot.plot_data()
+                
+                plot.plot_energy(plot.ax[0,1])
+                plot.plot_coeffs(plot.ax[0,0], plot.ax[1,0])
+                plot.plot_walkers(plot.ax[0,2])
+                plot.plot_stderr(plot.ax[1,1])
+                plot.plot_nullspace(plot.ax[1,2])
+                plt.savefig('summary.png')
+                plt.close()
+
+                plot.plot_l1() 
 
 if __name__ == '__main__':
         mol = gto.M(atom = [['H', 0, 0, 0], ['H', 0, 0, 1.8]], 

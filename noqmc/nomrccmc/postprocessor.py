@@ -7,6 +7,7 @@ by a subset of possible exitations of the reference determinats
 (generally obtained from SCF metadynamics)
 Based on Booth, Thom and Alavi [2009], and Thom and Head-Gordon [2008]"""
 
+import logging
 import numpy as np
 import scipy.linalg as la
 import multiprocessing
@@ -25,6 +26,9 @@ from qcmagic.auxiliary.qcmagic_standards import ZERO_TOLERANCE
 from noqmc.nomrccmc.system import System
 from noqmc.nomrccmc.propagator import Propagator
 from noqmc.nomrccmc.propagator import calc_mat_elem
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 def mute():
     sys.stdout = open(os.devnull, 'w')
@@ -83,8 +87,8 @@ class Postprocessor(Propagator):
  #                               processes[key] = value.get()
  #                               self.H[i,j], self.H[j,i], self.overlap[i,j], self.overlap[j,i] = processes[key]
 
-                np.save('overlap.npy', self.overlap)
-                np.save('Hamiltonian.npy', self.H)
+                np.save(os.path.join(self.params['workdir'], 'overlap.npy'), self.overlap)
+                np.save(os.path.join(self.params['workdir'], 'Hamiltonian.npy') , self.H)
 
                 self.ov_eigval, self.ov_eigvec = la.eigh(self.overlap)
                 loc_th = 5e-06
@@ -108,7 +112,7 @@ class Postprocessor(Propagator):
                 #Project back into the whole, overcomplete space whereas now the
                 #eigenvectors do not have any components in the null space.
                 self.eigvecs = np.einsum('ij,jk->ik', projector_mat, self.eigvecs)
-                self.log.info(
+                logger.info(    
                     f'Overlap Eigs:   {self.ov_eigval}, {self.ov_eigvec}\n'
                 )
 
@@ -163,7 +167,7 @@ class Postprocessor(Propagator):
                         return self.ov_eigvec[:, index]
                 
                 if not any(np.isclose(self.eigvals,eigval)): 
-                        self.log.warning(
+                        logger.warning(    
                             f'Subspace requested for eigval {eigval}, \
                             but not present in spectrum'
                         )
@@ -201,7 +205,7 @@ class Postprocessor(Propagator):
                 
                 #The following is only for the plot
                 subspace_conc = np.concatenate((subspace,-subspace), axis=1)
-                self.log.info(f'x&xconc: {subspace.shape, subspace_conc.shape}')
+                logger.info(f'x&xconc: {subspace.shape, subspace_conc.shape}')
                 maes = []
                 for i in range(subspace_conc.shape[1]):
                         maes.append(MAE(self.coeffs[-1,:], subspace_conc[:,i]))
@@ -209,11 +213,11 @@ class Postprocessor(Propagator):
                 
                 self.final /= np.linalg.norm(self.final)
                 
-                self.log.info(
+                logger.info(    
                     f'final benchmark:        {self.final}, \
                     {np.linalg.norm(self.final)}'
                 )
-                self.log.info(
+                logger.info(    
                     f'QMC final state in correct subspace? \
                     {self.is_in_subspace(subspace = subspace, array = self.coeffs[-1,:], tolerance = 1e-02)}'
                 )
@@ -285,39 +289,29 @@ class Postprocessor(Propagator):
                 null_proj = np.einsum('ij,jk->ik', self.get_subspace(0.), self.get_subspace(0.).T)
                 self.nullspace_evol = np.einsum('ij,kj->ki', null_proj, self.coeffs)
                
-#                import matplotlib.pyplot as plt
-#                l1_tot = [np.linalg.norm(self.coeffs[i,:], ord=1) for i in range(self.coeffs.shape[0])]
-#                l1_sub = [np.linalg.norm(self.coeffs[i,:] - self.nullspace_evol[i,:], ord=1) for i in range(self.coeffs.shape[0])]
-#                plt.plot(l1_tot)
-#                plt.plot(l1_sub)
-#                plt.legend()
-#                plt.savefig('l1.png')
-#                plt.close()
-
                 #Selection of ground state from degenerate eigenvectors
                 if benchmark:
                         self.degeneracy_treatment()
                         
-                        self.log.info(
+                        logger.info(    
                             f'Benchmark:\nEigvals:    {self.eigvals}\n\
                             Eigvecs:        {self.eigvecs}'
                         )
-                        self.log.info(
-                            f'Final FCI energy:  {np.min(self.eigvals) + self.E_ref}'
+                        logger.info(    
+                            f'Reference energy:  {self.E_ref}'
                         )
-                        
+
+                        logger.info(    
+                            f'Final truncated NOCI energy:  {np.min(self.eigvals) + self.E_ref}'
+                        )
+
                         propagator = la.expm(
                             -1000 * (self.H - min(self.eigvals) * self.overlap)
                         )
                         propagated = np.einsum('ij,j->i', propagator, self.coeffs[0,:])
-                        self.log.info(f'Imag. Time Evol.: {propagated/np.linalg.norm(propagated)}')
+                        
+                        logger.info(f'Imag. Time Evol.: {propagated/np.linalg.norm(propagated)}')
 
-                #Dump output
-                self.log.info(f'Initial Guess:  {self.initial}')
-                #self.log.info(f'Final State:    {self.coeffs[-1,:]}')
-                #self.log.info(f'Hamiltonian:    {self.H}')
-                #self.log.info(f'Overlap:        {self.overlap}')
-                #NOTE NEW
 
 
 def MAE(x: np.ndarray, y: np.ndarray) -> float:

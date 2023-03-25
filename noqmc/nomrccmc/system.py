@@ -3,6 +3,7 @@
 General class that carries properties of the molecular system.
 """
 
+import logging
 import numpy as np
 import scipy.linalg as la
 from matplotlib import rc
@@ -39,8 +40,6 @@ from noqmc.utils.calc_util import (
 )
 from noqmc.utils.utilities import (
     Parser, 
-    Log, 
-    Timer,
     setup_workdir,
 )
 from noqmc.utils.excips import (
@@ -54,6 +53,10 @@ THRESHOLDS = {'ov_zero_th':       5e-06,
               'rounding':         int(-np.log10(ZERO_TOLERANCE))-4,
               }
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+
 class System():
         r"""...
 	"""
@@ -66,9 +69,9 @@ class System():
 			       random seed"""
                 assert params['delay'] > params['A']
 
-                if 'workdir' not in params: params['workdir'] = 'output'
-                if 'nr_scf' not in params: params['nr_scf'] = 3
-                setup_workdir(params['workdir'])
+#                if 'workdir' not in params: params['workdir'] = 'output'
+#                if 'nr_scf' not in params: params['nr_scf'] = 3
+#                setup_workdir(params['workdir'])
 
                 self.mol = mol
                 self.params = params
@@ -77,11 +80,8 @@ class System():
                 self.initial = None #np.empty shape dim
                 self.E_NOCI = None
                 self.index_map = {}
-                self.log = Log(
-                    filename = os.path.join(self.params['workdir'], 'log.out')
-                )
                 
-                self.log.info(f'Arguments:      {params}')                
+                logger.info(f'Arguments:      {params}')
 
         def get_reference(self, guess_rhf: np.ndarray, guess_uhf: np.ndarray) -> Sequence:
                 r""""""
@@ -109,13 +109,15 @@ class System():
                                 new_sd = ref.copy_from(ref, dtype=np.float64)
                                 new_sd.coefficients = [new_sd.coefficients[0]] * 2
                                 new_refs[i] = new_sd
-                        self.log.info(f'Ref. {i} Coeff: {new_refs[i].coefficients}')
+                        
+                        logger.info(f'Ref. {i} Coeff: {new_refs[i].coefficients}')
                 self.reference = new_refs       
 
                 HF = scf.RHF(self.mol).run()
                 self.enuc = HF.scf_summary['nuc']
                 self.E_HF = HF.e_tot
-                self.log.info(f'Restricted HF energy: {HF.e_tot}')
+                
+                logger.info(f'Restricted HF energy: {HF.e_tot}')
 
         def initialize_walkers(self, mode: str = 'noci') -> None:
                 r"""Generates the inital walker population on each reference
@@ -155,14 +157,14 @@ class System():
                                 self.noci_overlap = noci_overlap
                                 self.noci_eigvals, self.noci_eigvecs = la.eigh(noci_H, b=noci_overlap)
                         except:
-                                self.log.info(
+                                logger.info(
                                     f'No projection onto nonzero subspace implemented (yet).\
                                     Use distinct reference determinants or specify ref mode.'
                                 )
                                 raise NotImplementedError   
 
                         self.E_NOCI = self.noci_eigvals[0]
-                        self.log.info(f'E_NOCI = {self.E_NOCI}')
+                        logger.info(f'E_NOCI = {self.E_NOCI}')
 
                         indices = self.refdim * np.arange(
                                 self.params['nr_scf'], dtype=int
@@ -182,7 +184,7 @@ class System():
                         for i in range(self.params['nr_scf']):
                                 self.initial[self.refdim * i] = nr
                         self.E_NOCI = self.E_HF
-                self.log.info(f'Initial Guess:  {self.initial}')
+                logger.info(f'Initial Guess:  {self.initial}')
 
         def initialize_sao_hcore(self) -> None:
                 r"""Calculates atomic orbital overlap matrix sao and 1e integrals
@@ -289,7 +291,7 @@ class System():
         
                 self.H_dict = {}
 
-                self.log.info(f'Hilbert space dimensions: {self.HilbertSpaceDim}')
+                logger.info(f'Hilbert space dimensions: {self.HilbertSpaceDim}')
 
         def excite(self, sd: SingleDeterminant, 
                    ex: Tuple[Sequence[int],Sequence[int]] , 
@@ -354,7 +356,7 @@ class System():
                     + [n_virt] * exs + [2] * exs
                 )
 
-                self.log.info(
+                logger.info(
                     f'Hilbert space dimensions for excitation levels \
                     for a SCF solution: {self.subspace_partitioning}'
                 )

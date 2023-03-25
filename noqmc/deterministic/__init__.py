@@ -81,7 +81,18 @@ class Deterministic(Propagator):
                 plot = Plot()
                 data = plot.add_data(self.postpr)
                 plot.setup_figure(data)
-                plot.plot_data()
+                #plot.plot_data()
+                
+                plot.plot_energy(plot.ax[0,1])
+                plot.plot_coeffs(plot.ax[0,0], plot.ax[1,0])
+                plot.plot_walkers(plot.ax[0,2])
+                #self.plot_stderr(plot.ax[1,1])
+                plot.plot_nullspace(plot.ax[1,2])
+                plt.savefig('summary.png')
+                plt.close()
+
+                plot.plot_l1() 
+
 
 if __name__ == '__main__':
         mol = gto.M(atom=[['H', 0, 0, 0], ['H', 0, 0, 1.8]], 

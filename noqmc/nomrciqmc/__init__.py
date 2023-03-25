@@ -1,6 +1,12 @@
+import logging
+import os
 import numpy as np
+import matplotlib.pyplot as plt
 
-from noqmc.utils.utilities import Parser
+from noqmc.utils.utilities import (
+        Parser,
+        setup_workdir,
+)
 from noqmc.utils.plot import Plot
 
 from noqmc.nomrccmc.system import System
@@ -31,6 +37,9 @@ THRESHOLDS = {
     'rounding':         int(-np.log10(ZERO_TOLERANCE))-4,
 }
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 class NOCIQMC(Propagator):
         """Object that wraps initialization of the system, running the 
         population dynamics, processing the results and performing a 
@@ -42,11 +51,25 @@ class NOCIQMC(Propagator):
                         elif isinstance(params, str):
                                 params = Parser().parse(params)
                 else: params = DEFAULT_CIQMC_ARGS 
+                if 'workdir' not in params: params['workdir'] = 'output'
+                if 'nr_scf' not in params: params['nr_scf'] = 3
+                setup_workdir(params['workdir'])
+
                 self.params = params
+                self.initialize_log()
                 self.mol = mol
                 self.system = System(mol = mol, params = params)
                 self.initialized = False
-                
+       
+
+        def initialize_log(self) -> None:
+                r""""""
+                filename = os.path.join(self.params['workdir'], 
+                                        f'nociqmc_{os.getpid()}.log')
+                logging.basicConfig(
+                        filename=filename, #format='%(levelname)s: %(message)s', 
+                        ) #level=logging.INFO
+
         def run(self) -> Propagator:
                 r"""Executes the population dynamics algorithm."""
                 if not self.initialized: self.initialize_references() 
@@ -65,7 +88,7 @@ class NOCIQMC(Propagator):
                 :param guess_rhf: 
                 :param guess_uhf:"""
                 self.system.get_reference(
-                    guess_rhf = guess_rhf, guess_uhf = guess_uhf
+                    guess_rhf=guess_rhf, guess_uhf=guess_uhf
                 )
                 self.system.initialize()
                 self.initialized = True
@@ -75,18 +98,41 @@ class NOCIQMC(Propagator):
                 able to extract the Shift, coefficients, projected energy,
                 matrix elements and an error analysis."""
                 self.postpr = Postprocessor(self.prop)
-                self.postpr.postprocessing(benchmark = self.params['benchmark'])
+                self.postpr.postprocessing(benchmark=self.params['benchmark'])
                                 
-                self.stat = Statistics(self.prop.Ss, self.params)
-                self.stat.analyse() 
-                self.postpr.data_summary = self.stat.data_summary
+                self.statS = Statistics(self.prop.Ss, self.params)
+                self.statS.blockS = self.statS.analyse()
+                self.postpr.data_summary_S = self.statS.data_summary
+                
+                self.statE = Statistics(self.prop.E_proj, self.params)
+                self.statE.blockE = self.statE.analyse()
+                self.postpr.data_summary_E = self.statE.data_summary
+
+                dataS = self.statS.data_summary[self.statS.block]
+                dataE = self.statE.data_summary[self.statE.block]
+                final_vals = np.array([dataS.mean, dataS.std_err,
+                        dataE.mean, dataE.std_err])
+                np.save('final_vals.npy', final_vals)
+
+
 
         def plot(self) -> None:
 
                 plot = Plot()
                 data = plot.add_data(self.postpr)
                 plot.setup_figure(data)
-                plot.plot_data()
+                #plot.plot_data()
+                
+                plot.plot_energy(plot.ax[0,1])
+                plot.plot_coeffs(plot.ax[0,0], plot.ax[1,0])
+                plot.plot_walkers(plot.ax[0,2])
+                plot.plot_stderr(plot.ax[1,1])
+                plot.plot_nullspace(plot.ax[1,2])
+                plt.savefig('summary.png')
+                plt.close()
+
+                plot.plot_l1() 
+
 
 if __name__ == '__main__':
         mol = gto.M(atom=[['H', 0, 0, 0], ['H', 0, 0, 1.8]], 

@@ -42,46 +42,7 @@ class Parser():
                 r"""Compiles raw data into dictionary form readable
                 by the QMC code."""
                 self.arguments = {line[0]: line[1] for line in lines}
-                #Log().info(f'Arguments: {self.arguments}')
                 
-
-class Log():
-        r"""Crude logger, dumping stuff to a file."""
-        def __init__(self, name: str = __name__, filename: str = 'log.out') -> None:
-                self.name = name
-                self.file = filename 
-                if self.file in os.listdir(os.getcwd()):
-                        os.remove(os.path.join(os.getcwd(),self.file))
-                self.init_time = time.perf_counter()
-
-        def append(self, prefix: str, data: str) -> None:
-                with open(self.file, 'a') as f:
-                        f.write(f'{prefix}:     {data}\n')
-
-        def info(self, data: str) -> None:
-                self.append('info', data)
-                
-        def warning(self, data: str) -> None:
-                self.append('WARNING:', data)
-
-
-class Timer():
-        r"""Create Timer"""
-        def __init__(self) -> None:
-                self.time = [time.perf_counter()]
-                self.curr_t = self.time[0]
-                self.func_names = ['Initialization']                            
-                self.log = Log(filename = './time.out')
-
-        def lapse(self, func) -> None:
-                t = time.perf_counter()
-                self.time.append(t)
-                self.func_names.append(str(func))
-                self.log.info(f'Time for {func}:     {t - self.curr_t}')
-                self.curr_t = t
-
-        def stop(self) -> None:
-                pass
 
 def setup_workdir(workdir = None):
         if workdir is None:

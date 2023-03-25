@@ -5,7 +5,6 @@ a CI type wave function onto its ground state.
 """
 
 import numpy as np
-#import scipy.linalg as la
 import sys
 from typing import (
     Tuple, 
@@ -37,18 +36,23 @@ class Propagator(System):
 
 		:param system: System object containing information about Hilbert space"""
                 self.__dict__.update(system.__dict__)
-                self.E_proj = np.empty(self.params['it_nr'])
-                self.Ss = np.empty(self.params['it_nr']+1)
-                self.Nws = np.empty(self.params['it_nr'], dtype = int)
                 
+                self.Nws = np.empty(self.params['it_nr'], dtype = int)
+                self.n = np.empty(self.params['it_nr'])
+                self.curr_it = 0
+                self.E_ref = self.E_HF
+
                 self.coeffs = np.zeros(
                     [self.params['it_nr']+1, self.params['dim']], dtype = int
                 )
-                
                 self.coeffs[0,:] = self.initial.copy()
+                
+                self.E_proj = np.empty(self.params['it_nr']+1)
+                self.E_proj[0] = self.E_NOCI - self.E_ref
+
+                self.Ss = np.empty(self.params['it_nr']+1)
                 self.S = self.Ss[0] = 0
-                self.curr_it = 0
-                self.n = np.empty(self.params['it_nr'])
+
                 self.cluster_level = np.sum(self.reference[0].n_electrons)
                 self.NoneCluster = Cluster(excitors = 
                     [Excitor(
@@ -56,7 +60,6 @@ class Propagator(System):
                      )]
                 )
                 self.constS = self.params['c'] / ( self.params['A'] * self.params['dt'] )
-                self.E_ref = self.E_HF
 
         def generate_s(self) -> int:
                 r"""Determines Cluster size for population dynamics 
@@ -79,19 +82,25 @@ class Propagator(System):
                 index = self.ref_indices[index]
                 E_proj = np.einsum('i,i->', H_tmp[index,:], coeffs)
                 E_proj /= np.einsum('i,i->', overlap_tmp[index, :], coeffs)
-                self.E_proj[self.curr_it] = E_proj
+                self.E_proj[self.curr_it+1] = E_proj
 
-        def reeval_S(self, A: float=None, c: float=None) -> None:
+        def Shift(self) -> None:
                 r"""Updates shift every A-th iteration.
 
-                :param A:
-		:param c:
-		:param dt:"""
+                :param A: Interval of reevaluation of S
+		:param c: Empirical daming parameter c
+		"""
                 N_new = self.Nws[self.curr_it]
                 N_old = self.Nws[self.curr_it - self.params['A']]
                 self.n[self.curr_it] = N_new / N_old
                 self.S -= self.constS * np.log(N_new / N_old)
 
+        def Nw(self) -> None:
+                r"""Updates total number of walkers resident outside 
+                the kernel of S."""
+                overlap_tmp = np.nan_to_num(self.overlap) 
+                proj = np.einsum('ij,j->i', overlap_tmp, self.coeffs[self.curr_it, :])
+                self.Nws[self.curr_it] = np.linalg.norm(proj, ord=1)
 
         def cluster_generation(self, nr_ex: int, ss: Sequence[int],
                 p_interm: np.ndarray, scf: int, coeffs_scf: np.ndarray
@@ -99,9 +108,9 @@ class Propagator(System):
                 r"""Generates a set of nr_ex Clusters corresponding to Cluster
                 sizes provided in ss."""
                 clusters = np.repeat(self.NoneCluster, nr_ex)              
-                #count = 0
+                count = 0
                 
-                for count, s in enumerate(ss):                           
+                for s in ss:                           
                         #generate first cluster & check whether it is 0 
                         if s:                                              
                                 cluster_index = np.random.choice(
@@ -131,7 +140,7 @@ class Propagator(System):
                         cluster_i.p = p_clust                              
                         cluster_i.size = s                                 
                         clusters[count] = cluster_i 
-                        #count += 1
+                        count += 1
 
                 return clusters[:count]
 
@@ -213,12 +222,12 @@ class Propagator(System):
                 ) #excludes references in probabilities
                 p_scf = nr_excips_scf / nr_excips
                 p_coeff_scf = np.abs(coeffs_scf) / nr_excips_scf[:, np.newaxis]   #excludes references in probabilities
+                
                 ss_scf = [
-                    min(self.cluster_level, 
-                        #self.refdim - 1 - len(np.isclose(c, 0).nonzero()[0])
-                        self.refdim - 1 - (c==0).nonzero()[0]
+                    min(self.cluster_level,
+                        self.refdim - 1 - len(np.isclose(c, 0).nonzero()[0])
                     ) for c in coeffs_scf
-                ]
+                ] #self.refdim - 1 - (c==0).nonzero()[0]
                 
                 p_dens_scf = [
                     np.array([1/(2**(i+1)) for i in range(s+1)]) 
@@ -305,24 +314,19 @@ class Propagator(System):
                 r"""Executes the population dynamics algorithm."""
                 
                 for i in range(self.params['it_nr']):
-                        self.Nws[self.curr_it] = sum([
-                            int(np.round(np.abs(c))) 
-                            for c in self.coeffs[self.curr_it, :]
-                        ])
-                        
-                        if i % self.params['A'] == 0 and i > self.params['delay']: 
-                                #reevaluates S to stabilize # walkers
-                                self.reeval_S()	
-                        
-                        self.Ss[self.curr_it+1] = self.S
-                        self.population_dynamics()
-                        self.E()
+                        self.Nw()
 
+                        SHIFT_UPDATE = i%self.params['A'] == 0 and i > self.params['delay']
+                        if SHIFT_UPDATE: 
+                                #reevaluates S to stabilize # walkers
+                                self.Shift()
+                        self.Ss[self.curr_it+1] = self.S
+
+                        self.population_dynamics()
+                        
+                        self.E()
                         self.curr_it += 1
 
-                print('Hamiltonian:     ', self.H)
-                print('Overlap:         ', self.overlap)
-                #TODO store stuff in object
 
 def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet, 
                   enuc: float, sao: np.ndarray, hcore: float, E_ref: float, 

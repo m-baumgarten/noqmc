@@ -49,30 +49,30 @@ if __name__ == '__main__':
 
         #unsmoothness: mode 'noci', dt 0.002, nr_w 4000, A 12, c 0.03, it_nr 40000, delay 10000, theory_level 1
         r = 3
-        mol = setup_mol(r = r)
+        mol = setup_mol(r=r)
 
-        guess_rhf, guess_uhf = get_init_guess_LiH(r = r)
+        guess_rhf, guess_uhf = get_init_guess_LiH(r=r)
 
         params = { 
-                'mode': 'noci',
+                'mode': 'ref',
                 'verbosity': 1,
                 'seed': 69420,
-                'dt': 0.01,
+                'dt': 0.0005,
                 'nr_w': 4000,
                 'A': 12, 
-                'c': 0.03,
-                'it_nr': 4000,
-                'delay': 2000,
-                'theory_level': 1,
+                'c': 0.005,
+                'it_nr': 30000,
+                'delay': 10000,
+                'theory_level': 2,
                 'benchmark': 1,
                 'localization': 0,
-                'nr_scf': 3
+                'nr_scf': 2
         }
 
 
-        my_nociqmc = no.NOCIQMC(mol = mol, params = params)
+        my_nociqmc = no.NOCIQMC(mol=mol, params=params)
         my_nociqmc.initialize_references(
-                guess_rhf = guess_rhf, guess_uhf = guess_uhf
+                guess_rhf=guess_rhf, guess_uhf=guess_uhf
         )
         my_prop = my_nociqmc.run()
         my_nociqmc.get_data()

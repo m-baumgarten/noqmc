@@ -34,7 +34,10 @@ class Statistics():
                 )[0]
                 if np.isnan(self.block):
                         print('Blocking analysis did not converge.')
-                        return 0
+                        self.block = -1
+                #print('Optimal Block:   ', self.block)
+                self.mean = self.data_summary[self.block].mean
+                print('Data Summary:    ', self.mean)
                 return self.block
 
         def binning(self, n_bins: int) -> float:                
