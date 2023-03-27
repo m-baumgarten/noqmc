@@ -39,7 +39,7 @@ class NOCCMC(Propagator):
         """Object that wraps initialization of the system, running the 
         population dynamics, processing the results and performing a 
         blocking analysis on it."""
-        def __init__(self, mol: Mole, params = None, **kwargs):
+        def __init__(self, mol: Mole, params=None, **kwargs):
                 if params is not None:
                         if isinstance(params, dict):
                                 params = params
@@ -51,13 +51,16 @@ class NOCCMC(Propagator):
                 if not all(key in DEFAULT_CCMC_ARGS for key in kwargs):
                         raise NotImplementedError
                 if 'workdir' not in params: params['workdir'] = 'output'
-                if 'nr_scf' not in params: params['nr_scf'] = 3
                 setup_workdir(params['workdir'])
+              
+                if 'scf_sols' not in params:
+                        params['scf_sols'] = [1,1,1]
+                params['nr_scf'] = len(params['scf_sols'])
 
                 self.params = params                
                 self.initialize_log()
                 self.mol = mol
-                self.system = System(mol = mol, params = params)
+                self.system = System(mol=mol, params=params)
                 self.initialized = False
 
         def initialize_log(self) -> None:
@@ -115,6 +118,7 @@ class NOCCMC(Propagator):
 
         def plot(self) -> None:
                 from noqmc.utils.plot import Plot
+                import matplotlib.pyplot as plt
                 plot = Plot()
                 data = plot.add_data(self.postpr)
                 plot.setup_figure(data)

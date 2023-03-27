@@ -52,13 +52,16 @@ class NOCIQMC(Propagator):
                                 params = Parser().parse(params)
                 else: params = DEFAULT_CIQMC_ARGS 
                 if 'workdir' not in params: params['workdir'] = 'output'
-                if 'nr_scf' not in params: params['nr_scf'] = 3
                 setup_workdir(params['workdir'])
+
+                if 'scf_sols' not in params:
+                        params['scf_sols'] = [1,1,1]
+                params['nr_scf'] = len(params['scf_sols'])
 
                 self.params = params
                 self.initialize_log()
                 self.mol = mol
-                self.system = System(mol = mol, params = params)
+                self.system = System(mol=mol, params=params)
                 self.initialized = False
        
 
@@ -78,8 +81,8 @@ class NOCIQMC(Propagator):
                 self.__dict__.update(self.prop.__dict__)
                 return self.prop
 
-        def initialize_references(self, guess_rhf: np.ndarray = None, 
-                                  guess_uhf: np.ndarray = None) -> None:
+        def initialize_references(self, guess_rhf: np.ndarray=None, 
+                                  guess_uhf: np.ndarray=None) -> None:
                 r"""Generates the SCF solutions required to run the population
                 dynamics. Currently, 3 SCF solutions are generated: 1 RHF and 
                 2 UHF solutions. However, to generalize the code, just change

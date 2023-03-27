@@ -10,6 +10,7 @@ as a function that can be used in other applications.
 See also 16-h2_scan.py, 30-scan_pes.py, 32-break_spin_symm.py
 '''
 
+import logging
 import numpy as np
 from typing import Sequence
 
@@ -23,6 +24,9 @@ from qcmagic.interfaces.converters.pyscf import scf_to_state
 from noqmc.utils.excips import flatten
 
 from noqmc.utils.utilities import setup_workdir
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 def init_guess_mixed(mol,rhf,uhf,mixing_parameter=np.pi/4):
         ''' Generate density matrix with broken spatial and spin symmetry by mixing
@@ -59,7 +63,6 @@ def init_guess_mixed(mol,rhf,uhf,mixing_parameter=np.pi/4):
         Ca=np.zeros_like(mo_coeff)
         Cb=np.zeros_like(mo_coeff)
 
-
         #mix homo and lumo of alpha and beta coefficients
         q=mixing_parameter
 
@@ -78,65 +81,80 @@ def init_guess_mixed(mol,rhf,uhf,mixing_parameter=np.pi/4):
         dm =scf.UHF(mol).make_rdm1( (Ca,Cb), (mo_occ,mo_occ) )
         return dm 
 
+#write generate_rhf, generate_uhf, and switch_uhf 
 
-def generate_scf(mol, init_guess_rhf = None, init_guess_uhf = None, workdir = 'output', localization = True):
-    
-        #setup_workdir(workdir)
+def generate_scf(mol, scf_sols, init_guess_rhf=None, init_guess_uhf=None, 
+                 workdir='output', localization=True) -> Sequence:
+        r""""""
 
-        rhf = scf.RHF(mol)
-        uhf = scf.UHF(mol)
-        if init_guess_rhf is None:
-                erhf = rhf.kernel()
-        else:
-                erhf = rhf.kernel(init_guess_rhf)
-    
-        if init_guess_uhf is None:
-                euhf = uhf.kernel(init_guess_mixed(mol, rhf, uhf))
-        else: 
-                euhf = uhf.kernel(init_guess_uhf) 
+        scf_solutions = []
 
-        from_scf(rhf, os.path.join(workdir, 'rhf.molden'))
-        from_scf(uhf, os.path.join(workdir, 'uhf.molden'))
+        #Generate RHF solutions
+        for sol in range(scf_sols[0]):
+                rhf = scf.RHF(mol)
+                if init_guess_rhf is None:
+                        erhf = rhf.kernel()
+                else:
+                        erhf = rhf.kernel(init_guess_rhf)
+                from_scf(rhf, os.path.join(workdir, f'rhf_{sol}.molden'))
+                rhf = scf.addons.convert_to_uhf(rhf)
+                rhf.mo_coeff = np.array(rhf.mo_coeff)
+                scf_solutions.append(rhf)                
+
+        #Generate UHF solutions
+        for sol in range(scf_sols[1] + scf_sols[2]):
+                uhf = scf.UHF(mol)
+                if init_guess_uhf is None:
+                        euhf = uhf.kernel(init_guess_mixed(mol, rhf, uhf))
+                else:
+                        euhf = uhf.kernel(init_guess_uhf)
+                
+                if sol >= scf_sols[1]:
+                        uhf.mo_coeff[1], uhf.mo_coeff[0] = uhf.mo_coeff[0].copy(), uhf.mo_coeff[1].copy()
+
+                from_scf(uhf, os.path.join(workdir, f'uhf_{sol}.molden'))
+                scf_solutions.append(uhf)
 
         if localization:
-                for sol in [rhf, uhf]:
-                        old = sol.mo_coeff.copy()
+                for sol in scf_solutions:
                         localize(sol)
                         #use mulliken charges later for assignment of 
                         #electrons to certain local areas, allowing 
                         #for excitation generation between locally 
                         #adjacent areas.
                         a = sol.mulliken_pop()
-                        print(a)
+                        print('Mulliken Charges:        ', a)
+        
+        #TODO exchange rhf.mo_coeff with concatenated version of all MO's/Mulliken charges?
+        MO_AO_MAP = {i: np.where(np.abs(mo) == np.max(np.abs(mo)))[0][0] 
+                     for i, mo in enumerate(rhf.mo_coeff.T)}
 
-        #MO_AO_MAP = {i: np.where(mo == np.max(mo))[0][0] for i, mo in enumerate(rhf.mo_coeff.T)}
+        MO_AO_MAP = {}
+        dim = len(scf_solutions[0].mo_coeff.T)
+        test = []
+        for i_sol, sol in enumerate(scf_solutions):
+                for i_spinspace, spinspace in enumerate(sol.mo_coeff):
+                        MO_AO_MAP.update(
+                                {2*dim*i_sol + dim*i_spinspace + i_mo: 
+                                 2*dim*i_sol + dim*i_spinspace + np.where(np.abs(mo) == np.max(np.abs(mo)))[0][0]
+                                 for i_mo, mo in enumerate(spinspace.T)}
+                        )
+        print(MO_AO_MAP)
+        exit()
 
-        sd_rhf = scf_to_state(rhf)
-        rhf_occ = [sd_rhf.occupied_coefficients[0]] * 2
-        rhf_coeffs = [sd_rhf.coefficients[0]] * 2
-        sd_new_rhf = SingleDeterminant(n_electrons = sd_rhf.n_electrons * 2, 
-                                   config = sd_rhf.configuration, holo = False,
-                                   full_coeffs = rhf_coeffs)
-   
-        double_rhf = False #True
-        if double_rhf:
-                sd_rhf2 = sd_rhf.copy_from(sd_new_rhf, dtype=np.float64)
-                return [sd_new_rhf, sd_rhf2]
+        dump_fci_ccsd(rhf, workdir=workdir)
 
-        sd_uhf1 = scf_to_state(uhf)
-        sd_uhf2 = sd_uhf1.copy_from(sd_uhf1, dtype=np.float64)
-        sd_uhf2.coefficients[1], sd_uhf2.coefficients[0] = sd_uhf2.coefficients[0], sd_uhf2.coefficients[1]
+        scf_solutions = [scf_to_state(sol) for sol in scf_solutions]
+        return scf_solutions
 
-        cisolver = fci.FCI(rhf)
+def dump_fci_ccsd(mf, workdir='output') -> None:
+        r""""""
+        cisolver = fci.FCI(mf)
         efci = cisolver.kernel()[0]
-        mycc = cc.CCSD(rhf).run()
+        mycc = cc.CCSD(mf).run()
         with open(os.path.join(workdir, 'fci.txt'), 'w') as f:
                 f.write('E(FCI)  = %.12f' % efci)
                 f.write('\nE(CCSD) = %.12f' % mycc.e_tot)
-
-        scf_solutions = [sd_new_rhf, sd_uhf1, sd_uhf2]
-        return scf_solutions
-
 
 def localize(mf) -> np.ndarray:
         

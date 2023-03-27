@@ -86,10 +86,11 @@ class System():
         def get_reference(self, guess_rhf: np.ndarray, guess_uhf: np.ndarray) -> Sequence:
                 r""""""
                 refs = generate_scf(
-                    mol=self.mol, init_guess_rhf=guess_rhf, 
+                    mol=self.mol, scf_sols=self.params['scf_sols'], 
+                    init_guess_rhf=guess_rhf, 
                     init_guess_uhf=guess_uhf,
                     workdir=self.params['workdir'],
-                    localization=self.params['localization']
+                    localization=self.params['localization'],
                 )
                 
                 self.reference = refs[:self.params['nr_scf']]
