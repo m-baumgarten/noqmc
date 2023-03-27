@@ -6,15 +6,13 @@ General class that carries properties of the molecular system.
 import logging
 import numpy as np
 import scipy.linalg as la
-from matplotlib import rc
 from scipy.special import binom
-import sys, os, shutil
+import os
 from itertools import combinations
 from typing import Tuple, Sequence
 from copy import deepcopy
 
 ####QCMAGIC IMPORTS
-import qcmagic
 from qcmagic.core.cspace.basis.basisset import ConvolvedBasisSet
 from qcmagic.core.backends.nonorthogonal_backend import (
     calc_overlap, 
@@ -69,10 +67,6 @@ class System():
 			       random seed"""
                 assert params['delay'] > params['A']
 
-#                if 'workdir' not in params: params['workdir'] = 'output'
-#                if 'nr_scf' not in params: params['nr_scf'] = 3
-#                setup_workdir(params['workdir'])
-
                 self.mol = mol
                 self.params = params
                 np.random.seed(self.params['seed'])
@@ -93,31 +87,23 @@ class System():
                     localization=self.params['localization'],
                 )
                 
-                self.reference = refs[:self.params['nr_scf']]
-                
+                self.reference = refs #[:self.params['nr_scf']]
+
                 assert self.params['theory_level'] <= sum(self.reference[0].n_electrons)
 
                 self.cbs = self.reference[0].configuration.get_subconfiguration("ConvolvedBasisSet")
-                self.params['nr_scf'] = len(self.reference)
+                #self.params['nr_scf'] = len(self.reference)
 
         def initialize_references(self) -> None:
                 r"""Adjusts RHF SingleDeterminant Objects to make them
                 nicely excitable. Stores all reference determinants in
                 a list self.reference."""
-                new_refs = deepcopy(self.reference)
-                for i,ref in enumerate(self.reference):
-                        if len(ref.coefficients) == 1:
-                                new_sd = ref.copy_from(ref, dtype=np.float64)
-                                new_sd.coefficients = [new_sd.coefficients[0]] * 2
-                                new_refs[i] = new_sd
-                        
-                        logger.info(f'Ref. {i} Coeff: {new_refs[i].coefficients}')
-                self.reference = new_refs       
 
                 HF = scf.RHF(self.mol).run()
                 self.enuc = HF.scf_summary['nuc']
                 self.E_HF = HF.e_tot
-                
+                self.scfdim = len(HF.mo_coeff.T)
+
                 logger.info(f'Restricted HF energy: {HF.e_tot}')
 
         def initialize_walkers(self, mode: str = 'noci') -> None:
@@ -361,12 +347,45 @@ class System():
                     f'Hilbert space dimensions for excitation levels \
                     for a SCF solution: {self.subspace_partitioning}'
                 )
- 
+
+        def allowMOexcitation(self, ex_str) -> bool:
+                r""""""
+                nr_scf = ex_str[0]
+                a_MO_dex = ex_str[1][0]
+                a_MO_ex = ex_str[2][0]
+                b_MO_dex = ex_str[1][1]
+                b_MO_ex = ex_str[2][1]
+
+                a_MO_dex = [self.getMOindex(nr_scf, mo, 0) for mo in a_MO_dex]
+                a_MO_ex = [self.getMOindex(nr_scf, mo, 0) for mo in a_MO_ex]
+                b_MO_dex = [self.getMOindex(nr_scf, mo, 1) for mo in b_MO_dex]
+                b_MO_ex = [self.getMOindex(nr_scf, mo, 1) for mo in b_MO_ex]
+
+                for a_d, a_e in zip(a_MO_dex, a_MO_ex):
+                        if np.abs(a_d - a_e) >= 1:
+                                return False
+                for b_d, b_e in zip(b_MO_dex, b_MO_ex):
+                        if np.abs(b_d - b_e) >= 1:
+                                return False
+
+                return True
+
+                #for spin, spin_MO in enumerate(ex_str[1:]):
+                #        MO_indices = [self.getMOindex(nr_scf, mo, spin) for mo in spin_MO]
+
+        def getMOindex(self, nr_scf, mo, spinspace) -> int:
+                r""""""
+                index = nr_scf*2*self.scfdim + spinspace*self.scfdim + mo
+                return index
+
+        def compose_excitation(self, ex_str1, ex_str2):
+                pass
 
         def initialize(self) -> None:
+                r""""""
                 self.initialize_references()
                 self.initialize_indexmap()
-                self.initialize_walkers(mode = self.params['mode'])
+                self.initialize_walkers(mode=self.params['mode'])
                 self.initialize_sao_hcore()
                 self.get_dimensions()
 

@@ -118,29 +118,20 @@ def generate_scf(mol, scf_sols, init_guess_rhf=None, init_guess_uhf=None,
         if localization:
                 for sol in scf_solutions:
                         localize(sol)
-                        #use mulliken charges later for assignment of 
-                        #electrons to certain local areas, allowing 
-                        #for excitation generation between locally 
-                        #adjacent areas.
                         a = sol.mulliken_pop()
                         print('Mulliken Charges:        ', a)
         
-        #TODO exchange rhf.mo_coeff with concatenated version of all MO's/Mulliken charges?
-        MO_AO_MAP = {i: np.where(np.abs(mo) == np.max(np.abs(mo)))[0][0] 
-                     for i, mo in enumerate(rhf.mo_coeff.T)}
+                MO_AO_MAP = {}
+                dim = len(scf_solutions[0].mo_coeff.T)
+                for i_sol, sol in enumerate(scf_solutions):
+                        for i_spinspace, spinspace in enumerate(sol.mo_coeff):
+                                MO_AO_MAP.update(
+                                        {2*dim*i_sol + dim*i_spinspace + i_mo: 
+                                        np.where(np.abs(mo) == np.max(np.abs(mo)))[0][0]
+                                        for i_mo, mo in enumerate(spinspace.T)}
+                                )
 
-        MO_AO_MAP = {}
-        dim = len(scf_solutions[0].mo_coeff.T)
-        test = []
-        for i_sol, sol in enumerate(scf_solutions):
-                for i_spinspace, spinspace in enumerate(sol.mo_coeff):
-                        MO_AO_MAP.update(
-                                {2*dim*i_sol + dim*i_spinspace + i_mo: 
-                                 2*dim*i_sol + dim*i_spinspace + np.where(np.abs(mo) == np.max(np.abs(mo)))[0][0]
-                                 for i_mo, mo in enumerate(spinspace.T)}
-                        )
-        print(MO_AO_MAP)
-        exit()
+                logger.info(f'MO to AO map:\n{MO_AO_MAP}')
 
         dump_fci_ccsd(rhf, workdir=workdir)
 
@@ -152,12 +143,13 @@ def dump_fci_ccsd(mf, workdir='output') -> None:
         cisolver = fci.FCI(mf)
         efci = cisolver.kernel()[0]
         mycc = cc.CCSD(mf).run()
-        with open(os.path.join(workdir, 'fci.txt'), 'w') as f:
-                f.write('E(FCI)  = %.12f' % efci)
-                f.write('\nE(CCSD) = %.12f' % mycc.e_tot)
+        #with open(os.path.join(workdir, 'fci.txt'), 'w') as f:
+        #        f.write('E(FCI)  = %.12f' % efci)
+        #        f.write('\nE(CCSD) = %.12f' % mycc.e_tot)
+        logger.info(f'FCI:       {efci}\nCCSD:      {mycc.e_tot}')
 
 def localize(mf) -> np.ndarray:
-        
+        r""""""
         #get occupations of converged MOs
         occs = mf.mo_occ
         if len(occs.shape) == 1: occs = occs[np.newaxis,:]

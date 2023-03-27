@@ -29,7 +29,7 @@ from noqmc.nomrccmc.propagator import calc_mat_elem
 class Propagator(System):
         r"""
         Class for propagation of the wavefunction/walkers in imaginary 
-        time.
+        time. Inherits determinant methods from the System class. 
         """
 
         def __init__(self, system: System) -> None:
@@ -40,7 +40,7 @@ class Propagator(System):
                 """
                 self.__dict__.update(system.__dict__)
                 
-                #initialize properties of the propagator 
+                #Initialize Properties of the Propagator 
                 self.Nws = np.empty(self.params['it_nr'], dtype = int)
                 self.n = []
                 self.curr_it = 0
@@ -56,15 +56,17 @@ class Propagator(System):
                 self.S = self.Ss[0] = 0
 
         def E(self) -> None:
-                r"""Calculates energy estimator at current iteration."""
+                r"""Calculates energy estimator at current iteration
+                based on the cached Hamiltonian and overlap matrix."""
                 
                 coeffs = self.coeffs[self.curr_it,:]
                 overlap_tmp = np.nan_to_num(self.overlap)
                 H_tmp = np.nan_to_num(self.H)
                 
+                #Get Index of Maximum Value
                 self.index = np.where(
                         np.abs(coeffs) == np.max(np.abs(coeffs))
-                )[0][0] #get index of maximum value 
+                )[0][0] 
                 
                 E_proj = np.einsum('i,i->', H_tmp[self.index,:], coeffs)
                 E_proj /= np.einsum('i,i->', overlap_tmp[self.index, :], coeffs)
@@ -83,30 +85,41 @@ class Propagator(System):
 
         def Nw(self) -> None:
                 r"""Updates total number of walkers resident outside 
-                the kernel of S."""
+                the kernel of S.
+                """
                 overlap_tmp = np.nan_to_num(self.overlap) 
                 proj = np.einsum('ij,j->i', overlap_tmp, self.coeffs[self.curr_it, :])
                 self.Nws[self.curr_it] = np.linalg.norm(proj, ord=1)
 
         def population_dynamics(self) -> None:
                 r"""Spawning/Death in one step due to nonorthogonality. 
-		Writes changes to current wavefunction to sp_coeffs."""
-                sp_coeffs = np.zeros(self.params['dim'], dtype = int)
+		Writes changes to current wavefunction to sp_coeffs.
+                """
+                sp_coeffs = np.zeros(self.params['dim'], dtype=int)
 
                 for i,coeff in enumerate(self.coeffs[self.curr_it, :]):
                         
                         sign_coeff = np.sign(coeff)
-                        key_i = self.index_map_rev[i]
                         
-                        #uniform excitation generation -> TODO generalize
-                        js = np.random.randint(0,self.params['dim'],size=abs(coeff))
+                        #Uniform Excitation Generation -> TODO Generalize
+                        js = np.random.randint(0, self.params['dim'], size=abs(coeff))
 
-                        #prepare self.H and self.overlap:
+                        #Prepare self.H and self.overlap:
+                        key_i = self.index_map_rev[i]
                         det_i = self.generate_det(key_i)
                         occ_i = det_i.occupied_coefficients
+                        
                         set_js, index, counts = np.unique(
-                            js, return_index = True, return_counts = True
+                            js, return_index=True, return_counts=True
                         )
+                        #TODO generate array of bools here indicating whether excitation to j is allowed from i
+                        #and zip in in loop over set_js
+                        ####---LOCALIZATION STEP
+                        #for j in set_js:
+                        #        key_j = self.index_map_rev[j]
+                                
+                        ####---END
+
 
                         for j in set_js:
                                 MAT_ELEM_CACHED = not np.isnan(self.H[i,j])
@@ -116,10 +129,10 @@ class Propagator(System):
                                 occ_j = det_j.occupied_coefficients
                                 
                                 elem = calc_mat_elem(
-                                    occ_i = occ_i, occ_j = occ_j, 
-                                    cbs = self.cbs, enuc = self.enuc, 
-                                    sao = self.sao, hcore = self.hcore,
-                                    E_ref = self.E_ref
+                                    occ_i=occ_i, occ_j=occ_j, 
+                                    cbs=self.cbs, enuc=self.enuc, 
+                                    sao=self.sao, hcore=self.hcore,
+                                    E_ref=self.E_ref
                                 )
                                 self.H[i,j], self.H[j,i] = elem[0], elem[1]
                                 self.overlap[i,j], self.overlap[j,i] = elem[2], elem[3]
@@ -137,7 +150,7 @@ class Propagator(System):
                                 s_int += (r < np.abs(b)) * np.sign(b)
                                 sp_coeffs[j] -= sign_coeff * s_int
 
-                #ANNIHILATION
+                #Annihilation
                 self.coeffs[self.curr_it+1, :] = sp_coeffs
                 self.coeffs[self.curr_it+1, :] += self.coeffs[self.curr_it, :]
 
@@ -152,7 +165,8 @@ class Propagator(System):
                 """
                 
                 for i in range(self.params['it_nr']):
-                        #Only measure number of walkers outside of ker(S)
+
+                        #Only measure Number of Walkers outside of ker(S)
                         self.Nw()
                         
                         SHIFT_UPDATE = i%self.params['A'] == 0 and i > self.params['delay']
