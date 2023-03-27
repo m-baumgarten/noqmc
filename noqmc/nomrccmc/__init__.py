@@ -60,7 +60,7 @@ class NOCCMC(Propagator):
                 self.system = System(mol = mol, params = params)
                 self.initialized = False
 
-        def initialize_log() -> None:
+        def initialize_log(self) -> None:
                 filename = os.path.join(self.params['workdir'], 
                                         f'noccmc_{os.getpid()}.log')
                 logging.basicConfig(
@@ -107,8 +107,10 @@ class NOCCMC(Propagator):
                 self.statE.blockE = self.statE.analyse()
                 self.postpr.data_summary_E = self.statE.data_summary
 
-                final_vals = np.array([self.statS.data_summary.mean, self.statS.data_summary.std_err,
-                        self.statE.data_summary.mean, self.statE.data_summary.std_err])
+                dataS = self.statS.data_summary[self.statS.block]
+                dataE = self.statE.data_summary[self.statE.block]
+                final_vals = np.array([dataS.mean, dataS.std_err,
+                                       dataE.mean, dataE.std_err])
                 np.save('final_vals.npy', final_vals)
 
         def plot(self) -> None:
