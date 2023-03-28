@@ -57,15 +57,15 @@ if __name__ == '__main__':
                 'mode': 'noci',
                 'verbosity': 1,
                 'seed': 69420,
-                'dt': 0.005,
-                'nr_w': 4000,
+                'dt': 0.01,
+                'nr_w': 400,
                 'A': 12, 
-                'c': 0.005,
+                'c': 0.01,
                 'it_nr': 8000,
                 'delay': 2000,
                 'theory_level': 1,
                 'benchmark': 1,
-                'localization': 0,
+                'localization': 1,
                 'scf_sols': [1,1,1]
         }
 

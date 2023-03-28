@@ -120,24 +120,29 @@ def generate_scf(mol, scf_sols, init_guess_rhf=None, init_guess_uhf=None,
         if localization:
                 for sol in scf_solutions:
                         localize(sol)
-                        a = sol.mulliken_pop()
-                        print('Mulliken Charges:        ', a)
+                        #a = sol.mulliken_pop()
+                        #print('Mulliken Charges:        ', a)
         
                 MO_AO_MAP = {}
                 dim = len(scf_solutions[0].mo_coeff.T)
                 for i_sol, sol in enumerate(scf_solutions):
                         for i_spinspace, spinspace in enumerate(sol.mo_coeff):
+                                
+                                localized = [np.where(np.abs(mo) == np.max(np.abs(mo)))[0][0]
+                                             for i_mo, mo in enumerate(spinspace.T)]
+                                signs = [int(np.sign(mo[ind])) for ind, mo in zip(localized, spinspace.T)]
+                                
                                 MO_AO_MAP.update(
-                                        {2*dim*i_sol + dim*i_spinspace + i_mo: 
-                                        np.where(np.abs(mo) == np.max(np.abs(mo)))[0][0]
-                                        for i_mo, mo in enumerate(spinspace.T)}
+                                    {2*dim*i_sol + dim*i_spinspace + i_mo: sign*loc
+                                     for i_mo, (sign, loc) in enumerate(zip(signs, localized))}
                                 )
-
+                                print(MO_AO_MAP)
+                                exit()
+                                        
                 logger.info(f'MO to AO map:\n{MO_AO_MAP}')
 
         dump_fci_ccsd(rhf, workdir=workdir)
 
-#        scf_solutions = [scf_to_state(sol) for sol in scf_solutions]
         return scf_solutions
 
 
@@ -159,16 +164,9 @@ def dump_fci_ccsd(mf, workdir='output') -> None:
 
 def localize(mf) -> np.ndarray:
         r""""""
-        #get occupations of converged MOs
-        occs = mf.mo_occ
-        if len(occs.shape) == 1: occs = occs[np.newaxis,:]
-        mol = mf.mol
-        c = mf.mo_coeff
-        if len(c.shape) == 2: c = c[np.newaxis, :, :] 
-
         occ, virt = [], []
         
-        for occ_spinspace in occs:
+        for occ_spinspace in mf.mo_occ:
                 
                 occ_tmp, virt_tmp = [], []
                 
@@ -181,15 +179,16 @@ def localize(mf) -> np.ndarray:
         
         #Perform localization
         for i, (o, v) in enumerate(zip(occ, virt)):        
-                c_i = c[i, :, :]
-                c_i[:, o] = Boys(mol, c_i[:, o]).kernel(verbose=4)
-                c_i[:, v] = Boys(mol, c_i[:, v]).kernel(verbose=4)
+                c_i = mf.mo_coeff[i, :, :]
+                c_i[:, o] = Boys(mf.mol, c_i[:, o]).kernel() #verbose=4)
+                c_i[:, v] = Boys(mf.mol, c_i[:, v]).kernel() #verbose=4)
 
         print('localization done')
 
-        return c
+        return mf.mo_coeff
 
-def eigh_overcomplete_noci(H, overlap, ov_eigval, ov_eigvec, loc_th=5e-06) -> Tuple[np.ndarray, np.ndarray]:
+def eigh_overcomplete_noci(H, overlap, ov_eigval, ov_eigvec, loc_th=5e-06
+        ) -> Tuple[np.ndarray, np.ndarray]:
         r""""""
         indices = (ov_eigval > loc_th).nonzero()[0]
 
@@ -216,9 +215,11 @@ def eigh_overcomplete_noci(H, overlap, ov_eigval, ov_eigvec, loc_th=5e-06) -> Tu
 
 def tensor2number(indices: np.ndarray, shape: np.ndarray) -> int:
         r"""E.g. indices = (3,4,1) of tensor with shape (5,5,5)"""
-        number = 0
-        for i in range(len(shape)):
-                number += indices[i] * np.prod(shape[i+1:])
+        #number = 0
+        #for i in range(len(shape)):
+        #        number += indices[i] * np.prod(shape[i+1:])
+        number = np.sum([ind*np.prod(shape[i+1:]) 
+                         for i,ind in enumerate(indices)])
         return number
 
 
