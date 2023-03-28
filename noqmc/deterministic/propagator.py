@@ -26,8 +26,10 @@ from qcmagic.core.backends.nonorthogonal_backend import (
 from qcmagic.core.sspace.single_determinant import SingleDeterminant
 
 ####CUSTOM IMPORTS
-from noqmc.nomrccmc.system import System
-from noqmc.nomrccmc.propagator import calc_mat_elem
+from noqmc.nomrccmc.system import (
+    System,
+    calc_mat_elem,
+)
 
 norm = lambda x: x / np.linalg.norm(x, ord = 2) 
 

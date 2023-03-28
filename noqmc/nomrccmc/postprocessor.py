@@ -23,9 +23,12 @@ from qcmagic.core.backends.nonorthogonal_backend import (
 from qcmagic.core.sspace.single_determinant import SingleDeterminant
 from qcmagic.auxiliary.qcmagic_standards import ZERO_TOLERANCE
 
-from noqmc.nomrccmc.system import System
+from noqmc.nomrccmc.system import (
+    System,
+    calc_mat_elem,
+)
 from noqmc.nomrccmc.propagator import Propagator
-from noqmc.nomrccmc.propagator import calc_mat_elem
+from noqmc.utils.calc_util import eigh_overcomplete_noci
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -90,36 +93,9 @@ class Postprocessor(Propagator):
                 np.save(os.path.join(self.params['workdir'], 'overlap.npy'), self.overlap)
                 np.save(os.path.join(self.params['workdir'], 'Hamiltonian.npy') , self.H)
 
-                self.ov_eigval, self.ov_eigvec = la.eigh(self.overlap)
-                loc_th = 5e-06
-                indices = (self.ov_eigval > loc_th).nonzero()[0]  
-                
-                #Project onto linearly independent subspace 
-                projector_mat = self.ov_eigvec[:, indices]
-                projected_ov = np.einsum(
-                    'ij,jk,kl->il', projector_mat.T, self.overlap, projector_mat
-                )
-                projected_ham = np.einsum(
-                    'ij,jk,kl->il', projector_mat.T, self.H, projector_mat
-                )
-                
-                self.eigvals, self.eigvecs = la.eigh(
-                    projected_ham, 
-                    b=np.round(projected_ov,int(-np.log10(ZERO_TOLERANCE))-4), 
-                    type=1
-                )
-
-                #Project back into the whole, overcomplete space whereas now the
-                #eigenvectors do not have any components in the null space.
-                self.eigvecs = np.einsum('ij,jk->ik', projector_mat, self.eigvecs)
-                logger.info(    
-                    f'Overlap Eigs:   {self.ov_eigval}, {self.ov_eigvec}\n'
-                )
-
+                self.ov_eigval ,self.ov_eigvec = la.eigh(self.overlap)
+                self.eigvals, self.eigvecs, projector_mat = eigh_overcomplete_noci(self.H, self.overlap, self.ov_eigval, self.ov_eigvec)
                 self.projector1 = np.einsum('ij,jk->ik', projector_mat, projector_mat.T)
-                self.projector2 = np.einsum('ij,jk->ik', self.eigvecs, self.eigvecs.T)
-                self.projector3 = np.einsum('ij,jk->ik', self.ov_eigvec, self.ov_eigvec.T)
-                self.eigvecs_alt = np.einsum('ij,jk->ik', self.ov_eigvec, self.eigvecs)
 
         def good_guess(self) -> np.ndarray:
                 r"""Method for debugging purposes. Generates the lowest

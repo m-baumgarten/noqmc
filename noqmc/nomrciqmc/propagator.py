@@ -23,8 +23,10 @@ from qcmagic.core.backends.nonorthogonal_backend import (
 )
 
 ####CUSTOM IMPORTS
-from noqmc.nomrccmc.system import System
-from noqmc.nomrccmc.propagator import calc_mat_elem
+from noqmc.nomrccmc.system import (
+    System,
+    calc_mat_elem,
+)
 
 class Propagator(System):
         r"""
@@ -41,6 +43,7 @@ class Propagator(System):
                 self.__dict__.update(system.__dict__)
                 
                 #Initialize Properties of the Propagator 
+                self.Nw_ov = np.empty(self.params['it_nr'], dtype = int)
                 self.Nws = np.empty(self.params['it_nr'], dtype = int)
                 self.n = []
                 self.curr_it = 0
@@ -51,6 +54,7 @@ class Propagator(System):
 
                 self.E_proj = np.empty(self.params['it_nr']+1)
                 self.E_proj[0] = self.E_NOCI - self.E_ref
+                #self.E_proj[0] = self.E_NOCI
 
                 self.Ss = np.empty(self.params['it_nr']+1)
                 self.S = self.Ss[0] = 0
@@ -67,7 +71,6 @@ class Propagator(System):
                 self.index = np.where(
                         np.abs(coeffs) == np.max(np.abs(coeffs))
                 )[0][0] 
-                
                 E_proj = np.einsum('i,i->', H_tmp[self.index,:], coeffs)
                 E_proj /= np.einsum('i,i->', overlap_tmp[self.index, :], coeffs)
                 self.E_proj[self.curr_it+1] = E_proj
@@ -78,8 +81,8 @@ class Propagator(System):
                 :param A: Interval of reevaluation of S
 		:param c: Empirical daming parameter c
 		"""
-                N_new = self.Nws[self.curr_it]
-                N_old = self.Nws[self.curr_it - self.params['A']]
+                N_new = self.Nw_ov[self.curr_it]
+                N_old = self.Nw_ov[self.curr_it - self.params['A']]
                 self.n.append(N_new/N_old)
                 self.S -= self.params['c'] / (self.params['A'] * self.params['dt']) * np.log(N_new / N_old)
 
@@ -89,7 +92,8 @@ class Propagator(System):
                 """
                 overlap_tmp = np.nan_to_num(self.overlap) 
                 proj = np.einsum('ij,j->i', overlap_tmp, self.coeffs[self.curr_it, :])
-                self.Nws[self.curr_it] = np.linalg.norm(proj, ord=1)
+                self.Nw_ov[self.curr_it] = np.linalg.norm(proj, ord=1)
+                self.Nws[self.curr_it] = np.linalg.norm(self.coeffs[self.curr_it, :], ord=1)
 
         def population_dynamics(self) -> None:
                 r"""Spawning/Death in one step due to nonorthogonality. 
@@ -173,9 +177,9 @@ class Propagator(System):
                         if SHIFT_UPDATE: 
                                 self.Shift()
                         self.Ss[self.curr_it+1] = self.S
-                        
+
                         self.population_dynamics()
-                        
+
                         self.E()
                         self.curr_it += 1
 

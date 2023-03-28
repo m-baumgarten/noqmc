@@ -25,7 +25,10 @@ from noqmc.utils.excips import (
     Excitor, 
 )    
 
-from noqmc.nomrccmc.system import System
+from noqmc.nomrccmc.system import (
+    System,
+    calc_mat_elem,
+)
 
 class Propagator(System):
         r"""Class for propagation of the wavefunction/walkers in 
@@ -326,24 +329,4 @@ class Propagator(System):
                         
                         self.E()
                         self.curr_it += 1
-
-
-def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet, 
-                  enuc: float, sao: np.ndarray, hcore: float, E_ref: float, 
-                  ) -> Sequence[np.ndarray]:
-        r"""Outsourced calculation of Hamiltonian and 
-        overlap matrix elements to parallelize code."""
-        H_ij, H_ji = calc_hamiltonian(cws = occ_i, cxs = occ_j, cbs = cbs, 
-                                      enuc = enuc, holo = False, _sao = sao, 
-                                      _hcore = hcore)
-        
-        overlap_ij, overlap_ji = calc_overlap(cws = occ_i, cxs = occ_j, 
-                                              cbs = cbs, holo = False, 
-                                              _sao = sao)
-
-        H_ij -= E_ref * overlap_ij
-        H_ji -= E_ref * overlap_ji
-
-        return [H_ij, H_ji, overlap_ij, overlap_ji]
-
 

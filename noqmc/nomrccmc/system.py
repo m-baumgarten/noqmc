@@ -35,6 +35,9 @@ from pyscf.gto.mole import Mole
 from noqmc.utils.calc_util import (
     generate_scf, 
     exstr2number,
+    eigh_overcomplete_noci,
+    scfarray_to_state,
+    E_HF
 )
 from noqmc.utils.utilities import (
     Parser, 
@@ -87,12 +90,12 @@ class System():
                     localization=self.params['localization'],
                 )
                 
-                self.reference = refs #[:self.params['nr_scf']]
+                self.refs_scfobj = refs
+                self.reference = scfarray_to_state(refs)
 
                 assert self.params['theory_level'] <= sum(self.reference[0].n_electrons)
 
                 self.cbs = self.reference[0].configuration.get_subconfiguration("ConvolvedBasisSet")
-                #self.params['nr_scf'] = len(self.reference)
 
         def initialize_references(self) -> None:
                 r"""Adjusts RHF SingleDeterminant Objects to make them
@@ -108,69 +111,45 @@ class System():
 
         def initialize_walkers(self, mode: str = 'noci') -> None:
                 r"""Generates the inital walker population on each reference
-                determinant
+                determinant.
                 
                 :param mode: Specifies the type of initial guess. Default is noci.
                 """
-                
+
+                self.initial = np.zeros(shape=self.params['dim'], dtype=int)
+
                 if mode == 'noci':
                         noci_H = np.zeros(
-                                shape=(self.params['nr_scf'], 
-                                        self.params['nr_scf'])
+                            shape=(self.params['nr_scf'], self.params['nr_scf'])
                         )
-                        noci_overlap = np.zeros(
-                                shape=(self.params['nr_scf'], 
-                                        self.params['nr_scf'])
-                        )
-                         
-                        for i in range(self.params['nr_scf']):
-                                det_i = self.reference[i]
-                                occ_i = det_i.occupied_coefficients
-                                for k in range(self.params['nr_scf'] - i):
-                                        j = i+k
-                                        det_j = self.reference[j]
-                                        occ_j = det_j.occupied_coefficients
-                                        noci_H[i,j], noci_H[j,i] = calc_hamiltonian(
-                                            cws = occ_i, cxs = occ_j, 
-                                            cbs = self.cbs, enuc = self.enuc, 
-                                            holo = False
-                                        )
-                                        noci_overlap[i,j], noci_overlap[j,i] = calc_overlap(
-                                            cws = occ_i, cxs = occ_j, 
-                                            cbs = self.cbs, holo = False
-                                        )
-                        try:
-                                self.noci_H = noci_H
-                                self.noci_overlap = noci_overlap
-                                self.noci_eigvals, self.noci_eigvecs = la.eigh(noci_H, b=noci_overlap)
-                        except:
-                                logger.info(
-                                    f'No projection onto nonzero subspace implemented (yet).\
-                                    Use distinct reference determinants or specify ref mode.'
-                                )
-                                raise NotImplementedError   
-
+                        noci_overlap = np.zeros_like(noci_H)
+                        
+                        occs = [ref.occupied_coefficients for ref in self.reference]
+                        for i, occ_i in enumerate(occs):
+                                for j, occ_j in enumerate(occs[i:], i):        
+                                        elems = calc_mat_elem(occ_i=occ_i, occ_j=occ_j,
+                                                              cbs=self.cbs, enuc=self.enuc,
+                                                              sao=self.sao, hcore=self.hcore,
+                                                              E_ref=0)
+                                        noci_H[i,j], noci_H[j,i] = elems[:2]
+                                        noci_overlap[i,j], noci_overlap[j,i] = elems[2:]
+                        
+                        noci_ov_eigval, noci_ov_eigvec = la.eigh(noci_overlap)
+                        self.noci_eigvals, self.noci_eigvecs, _ = eigh_overcomplete_noci(noci_H, noci_overlap, noci_ov_eigval, noci_ov_eigvec)
                         self.E_NOCI = self.noci_eigvals[0]
-                        logger.info(f'E_NOCI = {self.E_NOCI}')
-
-                        indices = self.refdim * np.arange(
-                                self.params['nr_scf'], dtype=int
-                        )
-
-                        self.initial = np.zeros(shape=self.params['dim'], dtype=int)
                         
                         norm_noci = np.linalg.norm(self.noci_eigvecs[:,0], ord=1)
-                        for i in indices:
-                                ind1 = int(i / (self.params['dim'] / self.params['nr_scf']))
-                                self.initial[i] = int(
-                                    self.params['nr_w'] * self.noci_eigvecs[ind1, 0] / norm_noci
-                                )
+                        for i in range(self.params['nr_scf']):        
+                                nr = int(self.params['nr_w'] * self.noci_eigvecs[i,0] / norm_noci)
+                                self.initial[self.refdim * i] = nr
 
                 elif mode == 'ref':
-                        nr = int(self.params['nr_w'] / len(self.reference))
+                        nr = int(self.params['nr_w'] / self.params['nr_scf'])
                         for i in range(self.params['nr_scf']):
                                 self.initial[self.refdim * i] = nr
-                        self.E_NOCI = self.E_HF
+                        self.E_NOCI = np.mean(E_HF(self.refs_scfobj))
+                
+                logger.info(f'E_NOCI = {self.E_NOCI}')
                 logger.info(f'Initial Guess:  {self.initial}')
 
         def initialize_sao_hcore(self) -> None:
@@ -224,25 +203,20 @@ class System():
                 
                 index = 0
                 self.HilbertSpaceDim = np.zeros(self.params['theory_level'] + 1, dtype = int)
-                for nr_scf in range(self.params['nr_scf']):
-                        reference = self.reference[nr_scf]
-                        n_electrons = reference.n_electrons
-                        occs_alpha = range(reference.occupied_coefficients[0].shape[1])
-                        occs_beta = range(reference.occupied_coefficients[1].shape[1])
-                        virs_alpha = range(
-                            n_electrons[0], 
-                            n_electrons[0] + reference.virtual_coefficients[0].shape[1]
-                        )
-                        virs_beta = range(
-                            n_electrons[1], 
-                            n_electrons[1] + reference.virtual_coefficients[1].shape[1]
-                        )
+                for nr_scf, ref in enumerate(self.reference):
+                        n_e = ref.n_electrons
+                        ref_virs = ref.virtual_coefficients
+                        
+                        occs_alpha = range(n_e[0])
+                        occs_beta = range(n_e[1])
+                        virs_alpha = range(n_e[0], n_e[0]+ref_virs[0].shape[1])
+                        virs_beta = range(n_e[1], n_e[1]+ref_virs[1].shape[1])
                         
                         #iterates over single, double, ... excitations 
                         for level in np.arange(0, self.params['theory_level'] + 1):
                                 for n_alpha in range(level+1):
                                         n_beta = int(level - n_alpha)
-                                        if n_alpha > n_electrons[0] or n_beta > n_electrons[1]: continue
+                                        if n_alpha > n_e[0] or n_beta > n_e[1]: continue
                                         for occ_alpha in combinations(occs_alpha, n_alpha):
                                                 for occ_beta in combinations(occs_beta, n_beta):
                                                         for vir_alpha in combinations(virs_alpha, n_alpha):
@@ -258,15 +232,11 @@ class System():
                 self.params['dim'] = int(np.sum(self.HilbertSpaceDim))
                 self.refdim = self.params['dim'] // self.params['nr_scf']
                 
-                self.scf_spaces = [
-                    np.arange(
-                        self.params['dim']
-                    )[i * self.refdim : (i+1) * self.refdim] 
-                        for i in range(self.params['nr_scf'])
-                ]
-                
-                self.ref_indices = [s[0] for s in self.scf_spaces]
-                self.initial = np.zeros(shape = self.params['dim'], dtype = int)
+                borders = [i*self.refdim for i in range(self.params['nr_scf']+1)]
+                self.scf_spaces = [range(borders[i], borders[i+1]) 
+                                   for i in range(self.params['nr_scf'])]
+
+                self.ref_indices = borders[:-1]
                 
                 if 'Hamiltonian.npy' in os.listdir():
                         self.H = np.load('Hamiltonian.npy')
@@ -274,7 +244,7 @@ class System():
                 else:
                         self.H = np.full((self.params['dim'], self.params['dim']), np.nan)
                         print('DIM:     ', self.params['dim'])
-                        self.overlap =  np.full((self.params['dim'], self.params['dim']), np.nan)
+                        self.overlap = np.full((self.params['dim'], self.params['dim']), np.nan)
         
                 self.H_dict = {}
 
@@ -385,9 +355,29 @@ class System():
                 r""""""
                 self.initialize_references()
                 self.initialize_indexmap()
-                self.initialize_walkers(mode=self.params['mode'])
                 self.initialize_sao_hcore()
+                self.initialize_walkers(mode=self.params['mode'])
+                #self.initialize_sao_hcore()
                 self.get_dimensions()
+
+
+def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet, 
+                  enuc: float, sao: np.ndarray, hcore: float, E_ref: float, 
+                  ) -> Sequence[np.ndarray]:
+        r"""Outsourced calculation of Hamiltonian and 
+        overlap matrix elements to parallelize code."""
+        H_ij, H_ji = calc_hamiltonian(cws=occ_i, cxs=occ_j, cbs=cbs, 
+                                      enuc=enuc, holo=False, _sao=sao, 
+                                      _hcore=hcore)
+        
+        overlap_ij, overlap_ji = calc_overlap(cws=occ_i, cxs=occ_j, 
+                                              cbs=cbs, holo=False, 
+                                              _sao=sao)
+
+        H_ij -= E_ref * overlap_ij
+        H_ji -= E_ref * overlap_ji
+
+        return [H_ij, H_ji, overlap_ij, overlap_ji]
 
 
 if __name__ == '__main__':

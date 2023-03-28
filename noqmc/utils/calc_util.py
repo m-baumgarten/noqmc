@@ -12,17 +12,19 @@ See also 16-h2_scan.py, 30-scan_pes.py, 32-break_spin_symm.py
 
 import logging
 import numpy as np
-from typing import Sequence
+import scipy.linalg as la
+from typing import Tuple, Sequence
 
 from pyscf import fci, scf, gto, cc
 from pyscf.tools.molden import from_scf
 from pyscf.lo import Boys 
 import os
+
 from qcmagic.core.sspace.single_determinant import SingleDeterminant
-
+from qcmagic.auxiliary.qcmagic_standards import ZERO_TOLERANCE
 from qcmagic.interfaces.converters.pyscf import scf_to_state
-from noqmc.utils.excips import flatten
 
+from noqmc.utils.excips import flatten
 from noqmc.utils.utilities import setup_workdir
 
 logger = logging.getLogger(__name__)
@@ -135,18 +137,25 @@ def generate_scf(mol, scf_sols, init_guess_rhf=None, init_guess_uhf=None,
 
         dump_fci_ccsd(rhf, workdir=workdir)
 
-        scf_solutions = [scf_to_state(sol) for sol in scf_solutions]
+#        scf_solutions = [scf_to_state(sol) for sol in scf_solutions]
         return scf_solutions
+
+
+def E_HF(scf_solutions) -> Sequence[float]:
+        r""""""
+        return [hf.e_tot for hf in scf_solutions]
+        
+
+def scfarray_to_state(scf_solutions: Sequence) -> Sequence:
+        r""""""
+        return [scf_to_state(sol) for sol in scf_solutions]
 
 def dump_fci_ccsd(mf, workdir='output') -> None:
         r""""""
         cisolver = fci.FCI(mf)
         efci = cisolver.kernel()[0]
         mycc = cc.CCSD(mf).run()
-        #with open(os.path.join(workdir, 'fci.txt'), 'w') as f:
-        #        f.write('E(FCI)  = %.12f' % efci)
-        #        f.write('\nE(CCSD) = %.12f' % mycc.e_tot)
-        logger.info(f'FCI:       {efci}\nCCSD:      {mycc.e_tot}')
+        logger.info(f'\nFCI:       {efci}\nCCSD:      {mycc.e_tot}')
 
 def localize(mf) -> np.ndarray:
         r""""""
@@ -180,6 +189,30 @@ def localize(mf) -> np.ndarray:
 
         return c
 
+def eigh_overcomplete_noci(H, overlap, ov_eigval, ov_eigvec, loc_th=5e-06) -> Tuple[np.ndarray, np.ndarray]:
+        r""""""
+        indices = (ov_eigval > loc_th).nonzero()[0]
+
+                #Project onto linearly independent subspace
+        projector_mat = ov_eigvec[:, indices]
+        projected_ov = np.einsum(
+            'ij,jk,kl->il', projector_mat.T, overlap, projector_mat
+        )
+        projected_ham = np.einsum(
+            'ij,jk,kl->il', projector_mat.T, H, projector_mat
+        )
+
+        eigvals, eigvecs = la.eigh(
+            projected_ham,
+            b=np.round(projected_ov,int(-np.log10(ZERO_TOLERANCE))-4),
+            type=1
+        )
+
+        #Project back into the whole, overcomplete space whereas now the
+        #eigenvectors do not have any components in the null space.
+        eigvecs = np.einsum('ij,jk->ik', projector_mat, eigvecs)
+
+        return eigvals, eigvecs, projector_mat
 
 def tensor2number(indices: np.ndarray, shape: np.ndarray) -> int:
         r"""E.g. indices = (3,4,1) of tensor with shape (5,5,5)"""
