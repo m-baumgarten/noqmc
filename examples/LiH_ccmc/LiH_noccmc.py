@@ -41,7 +41,7 @@ def setup_mol(r: float):
         }
 
         mol = gto.M(atom=[["Li", 0., 0., 0.],["H", 0., 0., r ]],
-                    basis = basis, verbose = 0, unit = 'Angstrom')
+                    basis=basis, verbose=0, unit='Angstrom')
         return mol
 
 if __name__ == '__main__':

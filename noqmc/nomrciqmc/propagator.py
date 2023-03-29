@@ -54,7 +54,6 @@ class Propagator(System):
 
                 self.E_proj = np.empty(self.params['it_nr']+1)
                 self.E_proj[0] = self.E_NOCI - self.E_ref
-                #self.E_proj[0] = self.E_NOCI
 
                 self.Ss = np.empty(self.params['it_nr']+1)
                 self.S = self.Ss[0] = 0
@@ -102,7 +101,10 @@ class Propagator(System):
                 sp_coeffs = np.zeros(self.params['dim'], dtype=int)
 
                 for i,coeff in enumerate(self.coeffs[self.curr_it, :]):
-                        
+                       
+                        self.excitation()
+                        exit()
+
                         sign_coeff = np.sign(coeff)
                         
                         #Uniform Excitation Generation -> TODO Generalize
@@ -138,8 +140,8 @@ class Propagator(System):
                                     sao=self.sao, hcore=self.hcore,
                                     E_ref=self.E_ref
                                 )
-                                self.H[i,j], self.H[j,i] = elem[0], elem[1]
-                                self.overlap[i,j], self.overlap[j,i] = elem[2], elem[3]
+                                self.H[i,j], self.H[j,i] = elem[:2]
+                                self.overlap[i,j], self.overlap[j,i] = elem[2:]
 
                         spawning_probs = [
                             self.params['dim'] * self.params['dt'] 
@@ -159,10 +161,43 @@ class Propagator(System):
                 self.coeffs[self.curr_it+1, :] += self.coeffs[self.curr_it, :]
 
                 if self.params['verbosity']:
-                        print(f'{self.curr_it} new spawns:      ',
-                            np.linalg.norm(self.coeffs[self.curr_it+1, :], ord = 1), 
+                        print(f'{self.curr_it}. Nw & S:      ',
+                            np.linalg.norm(self.coeffs[self.curr_it+1, :], ord=1), 
                             self.S 
                         )
+
+        def excitation(self, ex_str: Tuple=(1, ((0,),(1,)), ((4,),(6,))), nr: int=1): #-> Sequence:
+                r"""
+                :params det: Determinant we want to excite from
+                :params nr:  Number of excitations we wish to generate
+                
+                :returns: array of keys and array of generation probabilities"""
+                
+                #key = self.index_map_rev[1*self.refdim]
+                #det = self.generate_det(key)
+                excited_det = self.generate_det(ex_str)
+
+                indices = np.array([np.arange(n) for n in excited_det.n_electrons], dtype=object)
+                
+                #indices will contain the MO indices
+                for spin in range(2):
+                        indices[spin][list(ex_str[1][spin])] = list(ex_str[2][spin])
+                        indices[spin] = ex_str[0]*self.scfdim + indices[spin]
+                
+
+                AO_ind = [[self.MO_AO_map[index] for index in spin] for spin in indices] 
+                #print('det:     ', det.coefficients)
+                #print('ex_det:  ', excited_det.coefficients)
+#                print('inds:    ', indices, '\n', AO_ind)
+#
+#                print(self.MO_AO_map)
+                print(self.MO_AO_inv)
+                exit()
+                scfsol = np.random.choice(range(self.params['nr_scf']))
+                for spin in AO_ind:
+                        for AO in spin:         #self.MO_AO_inv must be a list of dictionaries, one for each scf solution
+                                MO_arr = np.random.choice(self.MO_AO_inv[AO])   #if replace=False get probability here
+
 
         def run(self) -> None:
                 r"""Executes the FCIQMC algorithm.

@@ -37,7 +37,9 @@ from noqmc.utils.calc_util import (
     exstr2number,
     eigh_overcomplete_noci,
     scfarray_to_state,
-    E_HF
+    E_HF,
+    get_MO_AO,
+    invert_MO_AO,
 )
 from noqmc.utils.utilities import (
     Parser, 
@@ -90,8 +92,13 @@ class System():
                     localization=self.params['localization'],
                 )
                 
+                self.enuc = refs[0].scf_summary['nuc']
+                self.scfdim = len(refs[0].mo_coeff.T)
                 self.refs_scfobj = refs
+
                 self.reference = scfarray_to_state(refs)
+                self.MO_AO_map = get_MO_AO(self.reference)
+                self.MO_AO_inv = invert_MO_AO(self.MO_AO_map, self.scfdim, self.params['nr_scf'])
 
                 assert self.params['theory_level'] <= sum(self.reference[0].n_electrons)
 

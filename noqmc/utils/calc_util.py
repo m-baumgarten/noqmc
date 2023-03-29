@@ -123,27 +123,54 @@ def generate_scf(mol, scf_sols, init_guess_rhf=None, init_guess_uhf=None,
                         #a = sol.mulliken_pop()
                         #print('Mulliken Charges:        ', a)
         
-                MO_AO_MAP = {}
-                dim = len(scf_solutions[0].mo_coeff.T)
-                for i_sol, sol in enumerate(scf_solutions):
-                        for i_spinspace, spinspace in enumerate(sol.mo_coeff):
-                                
-                                localized = [np.where(np.abs(mo) == np.max(np.abs(mo)))[0][0]
-                                             for i_mo, mo in enumerate(spinspace.T)]
-                                signs = [int(np.sign(mo[ind])) for ind, mo in zip(localized, spinspace.T)]
-                                
-                                MO_AO_MAP.update(
-                                    {2*dim*i_sol + dim*i_spinspace + i_mo: sign*loc
-                                     for i_mo, (sign, loc) in enumerate(zip(signs, localized))}
-                                )
-                                print(MO_AO_MAP)
-                                exit()
-                                        
-                logger.info(f'MO to AO map:\n{MO_AO_MAP}')
-
         dump_fci_ccsd(rhf, workdir=workdir)
 
         return scf_solutions
+
+def get_MO_AO(scf_solutions: Sequence) -> dict:
+        r"""scf_solutions here is an array of SingleDeterminant objects."""
+        MO_AO_MAP = []
+        dim = len(np.array(scf_solutions[0].coefficients).T)
+        for i_sol, sol in enumerate(scf_solutions):
+                MO_AO_SCF = {}
+                for i_spinspace, spinspace in enumerate(sol.coefficients):
+                        spinspace = np.array(spinspace.copy())
+
+                        localized = [np.where(np.abs(mo) == np.max(np.abs(mo)))[0][0]
+                                     for i_mo, mo in enumerate(spinspace.T)]
+                        #signs = [int(np.sign(mo[ind])) for ind, mo in zip(localized, spinspace.T)]
+
+                        #MO_AO_MAP.update(
+                        #        {2*dim*i_sol + dim*i_spinspace + i_mo: sign*loc
+                        #         for i_mo, (sign, loc) in enumerate(zip(signs, localized))}
+                        #)
+                        MO_AO_SCF.update(
+                                {dim*i_sol + i_mo: loc
+                                 for i_mo, loc in enumerate(localized)}
+                        )
+                MO_AO_MAP.append(MO_AO_SCF)
+        print(MO_AO_MAP)
+        exit()
+        logger.info(f'MO to AO map:\n{MO_AO_MAP}')
+        return MO_AO_MAP
+
+def invert_MO_AO(MO_AO_map: dict, dim: int, nr_scf: int) -> dict:
+        r""""""
+        print(MO_AO_map)
+        MO_AO_inverse = [{i: [key for key,val in MO_AO_map.items() if val==i and int(key/dim)==m] for i in range(dim*2)} for m in range(nr_scf)]
+       
+        #for key,val in MO_AO_map.items():
+        #        print(key)
+        #exit()
+#        MO_AO_inverse = []
+#        for m in range(nr_scf):
+#                tmp = {}
+#                for i in range(dim):
+#        #                print()
+#                        tmp[i] = [key for key,val in MO_AO_map.items() if val==i] # and int(key/dim)==m]
+#                MO_AO_inverse.append(tmp)
+
+        return MO_AO_inverse
 
 
 def E_HF(scf_solutions) -> Sequence[float]:
@@ -183,7 +210,7 @@ def localize(mf) -> np.ndarray:
                 c_i[:, o] = Boys(mf.mol, c_i[:, o]).kernel() #verbose=4)
                 c_i[:, v] = Boys(mf.mol, c_i[:, v]).kernel() #verbose=4)
 
-        print('localization done')
+        logger.info('localization done')
 
         return mf.mo_coeff
 
@@ -201,9 +228,10 @@ def eigh_overcomplete_noci(H, overlap, ov_eigval, ov_eigvec, loc_th=5e-06
             'ij,jk,kl->il', projector_mat.T, H, projector_mat
         )
 
+        PRECISION = int(-np.log10(ZERO_TOLERANCE))-4
         eigvals, eigvecs = la.eigh(
             projected_ham,
-            b=np.round(projected_ov,int(-np.log10(ZERO_TOLERANCE))-4),
+            b=np.round(projected_ov, PRECISION),
             type=1
         )
 

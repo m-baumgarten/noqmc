@@ -8,17 +8,14 @@
 #Based on Booth, Thom and Alavi [2009], and Thom and Head-Gordon [2008]
 
 import numpy as np
-import scipy.linalg as la
 import multiprocessing
-import sys, os, shutil
+import sys, os
 from typing import (
     Tuple, 
     Sequence,
 )    
 
 ####QCMAGIC IMPORTS
-from qcmagic.core.cspace.basis.basisset import ConvolvedBasisSet
-from qcmagic.interfaces.converters.pyscf import scf_to_state
 from qcmagic.core.backends.nonorthogonal_backend import (
     calc_overlap, 
     calc_hamiltonian, 
