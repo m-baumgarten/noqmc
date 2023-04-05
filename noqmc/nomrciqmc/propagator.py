@@ -9,6 +9,7 @@ Based on Booth, Thom and Alavi [2009], and Thom and Head-Gordon [2008]
 """
 
 import numpy as np
+from scipy.special import binom
 import sys
 from typing import (
     Tuple, 
@@ -102,8 +103,7 @@ class Propagator(System):
 
                 for i,coeff in enumerate(self.coeffs[self.curr_it, :]):
                        
-                        self.excitation()
-                        exit()
+                        #excited_str, pgens = self.excitation(ex_str=self.index_map_rev[i], size=abs(coeff))
 
                         sign_coeff = np.sign(coeff)
                         
@@ -118,14 +118,6 @@ class Propagator(System):
                         set_js, index, counts = np.unique(
                             js, return_index=True, return_counts=True
                         )
-                        #TODO generate array of bools here indicating whether excitation to j is allowed from i
-                        #and zip in in loop over set_js
-                        ####---LOCALIZATION STEP
-                        #for j in set_js:
-                        #        key_j = self.index_map_rev[j]
-                                
-                        ####---END
-
 
                         for j in set_js:
                                 MAT_ELEM_CACHED = not np.isnan(self.H[i,j])
@@ -145,7 +137,7 @@ class Propagator(System):
 
                         spawning_probs = [
                             self.params['dim'] * self.params['dt'] 
-                            * (self.H[i,j] - (self.S) * self.overlap[i,j])
+                            * (self.H[i,j] - self.S * self.overlap[i,j])
                             for j in set_js
                         ]
                         rand_vars = np.random.random(size=(len(spawning_probs)))
@@ -166,43 +158,149 @@ class Propagator(System):
                             self.S 
                         )
 
-        def excitation(self, ex_str: Tuple=(1, ((0,),(1,)), ((4,),(6,))), nr: int=1): #-> Sequence:
+        def pop_dynamics_exc(self) -> None:
+                r""""""
+                sp_coeffs = np.zeros(self.params['dim'], dtype=int)
+
+                for i,coeff in enumerate(self.coeffs[self.curr_it, :]):
+                        excited_str, pgens = self.excitation(ex_str=self.index_map_rev[i], size=abs(coeff))
+                        js = [self.index_map[s] for s in excited_str]
+
+                        sign_coeff = np.sign(coeff)
+
+                        key_i = self.index_map_rev[i]
+                        det_i = self.generate_det(key_i)
+                        occ_i = det_i.occupied_coefficients
+
+                        set_js, index, counts = np.unique(
+                            js, return_index=True, return_counts=True
+                        )
+                        pgens = pgens[index]
+
+                        for j,p in zip(set_js, pgens):
+                                MAT_ELEM_CACHED = not np.isnan(self.H[i,j])
+                                if MAT_ELEM_CACHED:
+                                        continue
+                                det_j = self.get_det(j)
+                                occ_j = det_j.occupied_coefficients
+
+                                elem = calc_mat_elem(
+                                    occ_i=occ_i, occ_j=occ_j,
+                                    cbs=self.cbs, enuc=self.enuc,
+                                    sao=self.sao, hcore=self.hcore,
+                                    E_ref=self.E_ref
+                                )
+                                self.H[i,j], self.H[j,i] = elem[:2]
+                                self.overlap[i,j], self.overlap[j,i] = elem[2:]
+
+                        spawning_probs = [
+                            self.params['dt'] * (self.H[i,j] - self.S * self.overlap[i,j]) / p
+                            for j,p in zip(set_js, pgens)
+                        ]
+                        rand_vars = np.random.random(size=(len(spawning_probs)))
+                        for j, n, ps, r in zip(set_js,counts,spawning_probs,rand_vars):
+                                ps_s = n * ps
+                                s_int = int(ps_s)
+                                b = ps_s - s_int
+                                s_int += (r < np.abs(b)) * np.sign(b)
+                                sp_coeffs[j] -= sign_coeff * s_int
+
+                #Annihilation
+                self.coeffs[self.curr_it+1, :] = sp_coeffs
+                self.coeffs[self.curr_it+1, :] += self.coeffs[self.curr_it, :]
+
+                if self.params['verbosity']:
+                        print(f'{self.curr_it}. Nw & S:      ',
+                            np.linalg.norm(self.coeffs[self.curr_it+1, :], ord=1),
+                            self.S
+                        )
+                pass
+
+        def excitation(self, ex_str: Tuple=(1, ((0,),()), ((4,),())), size: int=1): #-> Sequence:
                 r"""
                 :params det: Determinant we want to excite from
                 :params nr:  Number of excitations we wish to generate
                 
                 :returns: array of keys and array of generation probabilities"""
-                
-                #key = self.index_map_rev[1*self.refdim]
-                #det = self.generate_det(key)
+                scf_spawn = np.random.randint(0, self.params['nr_scf'], size=size)
+                print(self.fragmap)
+
+                # 1. Prepare MO list for ex_str:
                 excited_det = self.generate_det(ex_str)
-
+                # indices will contain the MO indices corresponding to an ex_str, 
+                # conserving the spin structure of the ex_str
                 indices = np.array([np.arange(n) for n in excited_det.n_electrons], dtype=object)
+                for i, spin in enumerate(indices):
+                        spin[list(ex_str[1][i])] = list(ex_str[2][i])
                 
-                #indices will contain the MO indices
-                for spin in range(2):
-                        indices[spin][list(ex_str[1][spin])] = list(ex_str[2][spin])
-                        indices[spin] = ex_str[0]*self.scfdim + indices[spin]
-                
+                out = []
+                p = []
+                for s in scf_spawn:
+                        pgen = 1./self.params['nr_scf']
+                        
+                        if s == ex_str[0]:
+                                #Let's first try with a uniform sampling scheme:
+                                pgen *= 1./self.refdim
+                                index = s * self.refdim + np.random.randint(self.refdim)
+                                new_str = self.index_map_rev[index]
+              
+                        else:
+                                old_ijk = [[(ex_str[0], j, k) for k in spin] for j, spin in enumerate(indices)] 
+                                frags = [[self.fragmap_inv[o] for o in spin] for spin in old_ijk]
+                                sample_rule = [np.unique(spin, return_counts=True) for spin in frags]
 
-                AO_ind = [[self.MO_AO_map[index] for index in spin] for spin in indices] 
-                #print('det:     ', det.coefficients)
-                #print('ex_det:  ', excited_det.coefficients)
-#                print('inds:    ', indices, '\n', AO_ind)
-#
-#                print(self.MO_AO_map)
-                print(self.MO_AO_inv)
-                exit()
-                scfsol = np.random.choice(range(self.params['nr_scf']))
-                for spin in AO_ind:
-                        for AO in spin:         #self.MO_AO_inv must be a list of dictionaries, one for each scf solution
-                                MO_arr = np.random.choice(self.MO_AO_inv[AO])   #if replace=False get probability here
+                                # 2. sample MOs according to sample_rule and produce correct pgen
+                                mo_sspace = []
+                                for i_s, spin in enumerate(sample_rule):
+                                        ind, freq = spin
+                                        frags = self.fragmap[s][i_s]
+                                       
+                                        mo = []
+                                        for i, n in zip(ind, freq):
+                                                print(n, frags[i])
+                                                mo.append(np.random.choice(frags[i], size=n, replace=False))
+                                                pgen *= 1/binom(len(frags[i]), n)
+                                        mo = np.concatenate(mo)
+                                        mo_sspace.append(mo)
+                                
+                                dexcits, excits, allowed = self.collapse(mo_sspace, excited_det.n_electrons)
+                                #print(dexcits, excits, allowed)
 
+                                if not allowed: 
+                                        continue
+                                
+                                new_str = (s, dexcits, excits)
+                        
+                        out.append(new_str)
+                        p.append(pgen)
+                #print(out, p)
+                #exit()
+                return out, np.array(p)
+
+
+        def collapse(self, indices: list, n_e: list) -> (list, bool):
+                r"""Evaluates whether a set of MO indices is within the Hilbert space
+                defined by the maximum allows excitation level."""
+                dex = [[],[]]
+                ex = [[],[]]
+                for j, (ind, n) in enumerate(zip(indices, n_e)):
+                        dex[j] = tuple(set(range(n)).difference(ind))
+                        for m, i in enumerate(ind):
+                                if i >= n:
+                                        ex[j].append(i)
+                for spin in ex:
+                        spin.sort()
+                ex = [tuple(spin) for spin in ex]
+                level = sum([len(s) for s in ex]) 
+                return tuple(dex), tuple(ex), level <= self.params['theory_level']
 
         def run(self) -> None:
                 r"""Executes the FCIQMC algorithm.
                 """
-                
+                TEST=False
+                pop_dyn = self.population_dynamics
+                if TEST: pop_dyn = self.pop_dynamics_exc
+
                 for i in range(self.params['it_nr']):
 
                         #Only measure Number of Walkers outside of ker(S)
@@ -213,7 +311,7 @@ class Propagator(System):
                                 self.Shift()
                         self.Ss[self.curr_it+1] = self.S
 
-                        self.population_dynamics()
+                        pop_dyn()
 
                         self.E()
                         self.curr_it += 1

@@ -21,7 +21,6 @@ from qcmagic.core.backends.nonorthogonal_backend import (
 )
 from qcmagic.core.sspace.single_determinant import SingleDeterminant
 from qcmagic.auxiliary.qcmagic_standards import ZERO_TOLERANCE
-from qcmagic.core.drivers.noci.basic_noci_driver import solve_noci
 from qcmagic.interfaces.liqcm import (
     get_1e_ints,
     Operator,
@@ -41,15 +40,7 @@ from noqmc.utils.calc_util import (
     get_MO_AO,
     invert_MO_AO,
 )
-from noqmc.utils.utilities import (
-    Parser, 
-    setup_workdir,
-)
-from noqmc.utils.excips import (
-    Cluster, 
-    Excitor, 
-    flatten,
-)    
+from noqmc.utils.fragmentation import fragment
 
 ####THRESHOLDS#####
 THRESHOLDS = {'ov_zero_th':       5e-06,
@@ -73,6 +64,7 @@ class System():
                 assert params['delay'] > params['A']
 
                 self.mol = mol
+                print(mol.ao_labels())
                 self.params = params
                 np.random.seed(self.params['seed'])
                 self.overlap = None     #shape dim,dim
@@ -177,6 +169,29 @@ class System():
                         get_1e_ints(self.cbs, Operator.kinetic, compl=compl)
                         + get_1e_ints(self.cbs, Operator.nuclear, compl=compl)
                 )
+        
+        def initialize_frag_map(self) -> None:
+                r""""""
+                fragments = fragment(self.sao)
+
+                self.fragments = {i: list(frag) for i, frag in enumerate(fragments)}
+                self.fragmap = [[{i: [] for i in self.fragments} for _ in range(2)] for _ in range(self.params['nr_scf'])]
+                self.fragmap_inv = {}
+
+                for i, scf in enumerate(self.reference):
+                        for j, coeff_spin in enumerate(scf.coefficients):
+                                for k, mo in enumerate(coeff_spin.T):
+                                        partial_mulliken = [np.sum(mo[frag]**2) for _, frag in self.fragments.items()]
+                                        frag_index = np.where(np.max(partial_mulliken) == partial_mulliken)[0][0]
+                                        
+                                        self.fragmap[i][j][frag_index].append(k)
+                                        self.fragmap_inv[(i,j,k)] = frag_index
+                
+                                #Remove empty fragments:
+                                for frag in list(self.fragmap[i][j].keys()):
+                                        #print(self.fragmap[i][j])
+                                        if self.fragmap[i][j][frag] == []:
+                                                del self.fragmap[i][j][frag]
 
         def generate_det(self, ex_str: str) -> SingleDeterminant:
                 r"""Generates Determinant at index i. Here, we only 
@@ -363,6 +378,7 @@ class System():
                 self.initialize_references()
                 self.initialize_indexmap()
                 self.initialize_sao_hcore()
+                self.initialize_frag_map()
                 self.initialize_walkers(mode=self.params['mode'])
                 #self.initialize_sao_hcore()
                 self.get_dimensions()

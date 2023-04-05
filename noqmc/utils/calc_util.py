@@ -149,16 +149,17 @@ def get_MO_AO(scf_solutions: Sequence) -> dict:
                                  for i_mo, loc in enumerate(localized)}
                         )
                 MO_AO_MAP.append(MO_AO_SCF)
-        print(MO_AO_MAP)
-        exit()
+        #print(MO_AO_MAP)
+        #exit()
         logger.info(f'MO to AO map:\n{MO_AO_MAP}')
         return MO_AO_MAP
 
 def invert_MO_AO(MO_AO_map: dict, dim: int, nr_scf: int) -> dict:
         r""""""
         print(MO_AO_map)
-        MO_AO_inverse = [{i: [key for key,val in MO_AO_map.items() if val==i and int(key/dim)==m] for i in range(dim*2)} for m in range(nr_scf)]
-       
+     #   MO_AO_inverse = [{i: [key for key,val in MO_AO_map.items() if val==i and int(key/dim)==m] for i in range(dim*2)} for m in range(nr_scf)]
+        MO_AO_inverse = None
+
         #for key,val in MO_AO_map.items():
         #        print(key)
         #exit()
