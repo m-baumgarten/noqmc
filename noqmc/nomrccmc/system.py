@@ -85,6 +85,9 @@ class System():
                 )
                 
                 self.enuc = refs[0].scf_summary['nuc']
+                self.E_HF = refs[0].e_tot
+                logger.info(f'Restricted HF energy: {self.E_HF}')
+
                 self.scfdim = len(refs[0].mo_coeff.T)
                 self.refs_scfobj = refs
 
@@ -95,18 +98,6 @@ class System():
                 assert self.params['theory_level'] <= sum(self.reference[0].n_electrons)
 
                 self.cbs = self.reference[0].configuration.get_subconfiguration("ConvolvedBasisSet")
-
-        def initialize_references(self) -> None:
-                r"""Adjusts RHF SingleDeterminant Objects to make them
-                nicely excitable. Stores all reference determinants in
-                a list self.reference."""
-
-                HF = scf.RHF(self.mol).run()
-                self.enuc = HF.scf_summary['nuc']
-                self.E_HF = HF.e_tot
-                self.scfdim = len(HF.mo_coeff.T)
-
-                logger.info(f'Restricted HF energy: {HF.e_tot}')
 
         def initialize_walkers(self, mode: str = 'noci') -> None:
                 r"""Generates the inital walker population on each reference
@@ -253,7 +244,7 @@ class System():
 
                 self.params['dim'] = int(np.sum(self.HilbertSpaceDim))
                 self.refdim = self.params['dim'] // self.params['nr_scf']
-                
+
                 borders = [i*self.refdim for i in range(self.params['nr_scf']+1)]
                 self.scf_spaces = [range(borders[i], borders[i+1]) 
                                    for i in range(self.params['nr_scf'])]
@@ -362,27 +353,18 @@ class System():
 
                 return True
 
-                #for spin, spin_MO in enumerate(ex_str[1:]):
-                #        MO_indices = [self.getMOindex(nr_scf, mo, spin) for mo in spin_MO]
-
         def getMOindex(self, nr_scf, mo, spinspace) -> int:
                 r""""""
                 index = nr_scf*2*self.scfdim + spinspace*self.scfdim + mo
                 return index
 
-        def compose_excitation(self, ex_str1, ex_str2):
-                pass
-
         def initialize(self) -> None:
                 r""""""
-                self.initialize_references()
                 self.initialize_indexmap()
                 self.initialize_sao_hcore()
                 self.initialize_frag_map()
-                self.initialize_walkers(mode=self.params['mode'])
-                #self.initialize_sao_hcore()
                 self.get_dimensions()
-
+                self.initialize_walkers(mode=self.params['mode'])
 
 def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet, 
                   enuc: float, sao: np.ndarray, hcore: float, E_ref: float, 

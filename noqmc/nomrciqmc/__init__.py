@@ -44,7 +44,7 @@ class NOCIQMC(Propagator):
         """Object that wraps initialization of the system, running the 
         population dynamics, processing the results and performing a 
         blocking analysis on it."""
-        def __init__(self, mol: Mole, params = None):
+        def __init__(self, mol: Mole, params=None):
                 if params is not None:
                         if isinstance(params, dict):
                                 params = params
@@ -75,7 +75,8 @@ class NOCIQMC(Propagator):
 
         def run(self) -> Propagator:
                 r"""Executes the population dynamics algorithm."""
-                if not self.initialized: self.initialize_references() 
+                if not self.initialized: #self.initialize_references()
+                        self.system.initialize()
                 self.prop = Propagator(self.system)
                 self.prop.run()
                 self.__dict__.update(self.prop.__dict__)
@@ -93,8 +94,8 @@ class NOCIQMC(Propagator):
                 self.system.get_reference(
                     guess_rhf=guess_rhf, guess_uhf=guess_uhf
                 )
-                self.system.initialize()
-                self.initialized = True
+                #self.system.initialize()
+                #self.initialized = True
 
         def get_data(self) -> None:
                 r"""After running the population dynamics, get_data() will be

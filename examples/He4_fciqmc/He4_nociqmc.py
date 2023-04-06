@@ -30,9 +30,9 @@ def setup_mol(r: float):
 if __name__ == '__main__':
 
         r = 2.5
-        mol = setup_mol(r = r)
+        mol = setup_mol(r=r)
 
-        guess_rhf, guess_uhf = get_init_guess_He4(r = r)
+        guess_rhf, guess_uhf = get_init_guess_He4(r=r)
 
         params = { 
                 'mode': 'ref',
@@ -42,12 +42,13 @@ if __name__ == '__main__':
                 'nr_w': 8000,
                 'A': 12, 
                 'c': 0.01,
-                'it_nr': 8000,
+                'it_nr': 10000,
                 'delay': 4000,
                 'theory_level': 2,
                 'benchmark': 1,
-                'localization': 1,
-                'nr_scf': 2
+                'localization': 0,
+                'scf_sols': [1,1,0],
+                'uniform': 0
         }
 
 

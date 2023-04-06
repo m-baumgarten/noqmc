@@ -35,6 +35,9 @@ THRESHOLDS = {
     'rounding':         int(-np.log10(ZERO_TOLERANCE))-4,
 }
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 class NOCCMC(Propagator):
         """Object that wraps initialization of the system, running the 
         population dynamics, processing the results and performing a 
@@ -55,7 +58,7 @@ class NOCCMC(Propagator):
               
                 if 'scf_sols' not in params:
                         params['scf_sols'] = [1,1,1]
-                params['nr_scf'] = len(params['scf_sols'])
+                params['nr_scf'] = sum(params['scf_sols'])
 
                 self.params = params                
                 self.initialize_log()
@@ -74,14 +77,16 @@ class NOCCMC(Propagator):
                
         def run(self) -> Propagator:
                 r"""Executes the population dynamics algorithm."""
-                if not self.initialized: self.initialise_references() 
+                if not self.initialized: #self.initialise_references() 
+                        self.system.initialize()
+
                 self.prop = Propagator(self.system)
                 self.prop.run()
                 self.__dict__.update(self.prop.__dict__)  
                 return self.prop
 
-        def initialize_references(self, guess_rhf: np.ndarray = None, 
-                                  guess_uhf: np.ndarray = None) -> None:
+        def initialize_references(self, guess_rhf: np.ndarray=None, 
+                                  guess_uhf: np.ndarray=None) -> None:
                 r"""Generates the SCF solutions required to run the population
                 dynamics. Currently, 3 SCF solutions are generated: 1 RHF and 
                 2 UHF solutions. However, to generalize the code, just change
@@ -92,15 +97,15 @@ class NOCCMC(Propagator):
                 self.system.get_reference(
                     guess_rhf=guess_rhf, guess_uhf=guess_uhf
                 )
-                self.system.initialize()
-                self.initialized = True
+                #self.system.initialize()
+                #self.initialized = True
 
         def get_data(self) -> None:
                 r"""After running the population dynamics, get_data() will be
                 able to extract the Shift, coefficients, projected energy,
                 matrix elements and an error analysis."""
                 self.postpr = Postprocessor(self.prop)
-                self.postpr.postprocessing(benchmark = self.params['benchmark'])
+                self.postpr.postprocessing(benchmark=self.params['benchmark'])
 
                 self.statS = Statistics(self.prop.Ss, self.params)
                 self.statS.blockS = self.statS.analyse()

@@ -8,6 +8,7 @@ by a subset of possible exitations of the reference determinats
 Based on Booth, Thom and Alavi [2009], and Thom and Head-Gordon [2008]
 """
 
+import logging
 import numpy as np
 from scipy.special import binom
 import sys
@@ -28,6 +29,10 @@ from noqmc.nomrccmc.system import (
     System,
     calc_mat_elem,
 )
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 
 class Propagator(System):
         r"""
@@ -297,9 +302,13 @@ class Propagator(System):
         def run(self) -> None:
                 r"""Executes the FCIQMC algorithm.
                 """
-                TEST=False
+                
                 pop_dyn = self.population_dynamics
-                if TEST: pop_dyn = self.pop_dynamics_exc
+                if 'uniform' in self.params:
+                        assert(self.params['localization'])
+                        if not self.params['uniform']:
+                                pop_dyn = self.pop_dynamics_exc
+                                logger.info('Using localized excitation generation scheme!')
 
                 for i in range(self.params['it_nr']):
 

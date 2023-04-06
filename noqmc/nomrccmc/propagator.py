@@ -129,6 +129,7 @@ class Propagator(System):
                             self.index_map_rev[index] 
                             for index in cluster_index + scf * self.refdim
                         ]
+                        
                         cluster_i = [
                             Excitor(excitation=ex, excips=coeffs_scf[scf,index]) 
                             for ex, index in zip(cluster_i,cluster_index)
