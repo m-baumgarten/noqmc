@@ -30,6 +30,13 @@ class Parameters:
         nr_scf: int = None
         workdir: str = None
 
+@dataclass
+class Thresholds:
+        r"""Collection of thresholds used throughout the iteration."""
+        ov_zero_thresh: float = None
+        rounding: float = None
+        subspace: float = None
+
 class Parser():
         r"""Crude Input parser, reading arguments for a nomrci-qmc
         calculation from an input file"""

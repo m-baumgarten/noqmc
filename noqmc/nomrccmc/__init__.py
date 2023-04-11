@@ -2,39 +2,22 @@ import logging
 import os
 import numpy as np
 
+from pyscf.gto import Mole
+from pyscf import gto
+
 from noqmc.utils.utilities import (
         Parser,
         setup_workdir,
-        Parameters
+        Parameters,
 )
-
 from noqmc.nomrccmc.system import System
 from noqmc.nomrccmc.propagator import Propagator
 from noqmc.nomrccmc.postprocessor import Postprocessor
 from noqmc.nomrccmc.statistics import Statistics
 
-from pyscf.gto import Mole
-from pyscf import gto
+from noqmc.utils.glob import DEFAULT_CCMC_ARGS
+
 from qcmagic.auxiliary.qcmagic_standards import ZERO_TOLERANCE
-
-DEFAULT_CCMC_ARGS = Parameters(
-    mode='noci',
-    verbosity=1,
-    seed=69420,
-    dt=0.01,
-    nr_w=3000,
-    A=10,
-    c=0.01,
-    it_nr=50000,
-    delay=20000,
-    theory_level=1,
-    benchmark=1,
-)
-
-THRESHOLDS = {
-    'ov_zero_th':       5e-06,
-    'rounding':         int(-np.log10(ZERO_TOLERANCE))-4,
-}
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)

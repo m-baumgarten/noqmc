@@ -2,32 +2,15 @@ import logging
 import os
 import numpy as np
 
-from noqmc.utils.utilities import Parameters
+from pyscf.gto import Mole
 
+from noqmc.utils.utilities import Parameters
+from noqmc.utils.glob import DEFAULT_CIQMC_ARGS
 from noqmc.nomrccmc import NOCCMC
 from noqmc.nomrciqmc.propagator import Propagator
+from noqmc.utils.glob import DEFAULT_CIQMC_ARGS
 
-from pyscf.gto import Mole
 from qcmagic.auxiliary.qcmagic_standards import ZERO_TOLERANCE
-
-DEFAULT_CIQMC_ARGS = Parameters(
-    mode='noci',
-    verbosity=1,
-    seed=69420,
-    dt=0.01,
-    nr_w=3000,
-    A=10,
-    c=0.01,
-    it_nr=50000,
-    delay=20000,
-    theory_level=1,
-    benchmark=1,
-)
-
-THRESHOLDS = {
-    'ov_zero_th':       5e-06,
-    'rounding':         int(-np.log10(ZERO_TOLERANCE))-4,
-}
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -45,7 +28,7 @@ class NOCIQMC(NOCCMC):
                                         f'nociqmc_{os.getpid()}.log')
                 logging.basicConfig(
                         filename=filename, #format='%(levelname)s: %(message)s', 
-                        ) #level=logging.INFO
+                ) #level=logging.INFO
 
         def run(self) -> Propagator:
                 r"""Executes the population dynamics algorithm."""
