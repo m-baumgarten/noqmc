@@ -2,6 +2,66 @@ import os
 import sys
 import shutil
 from typing import Sequence
+from dataclasses import dataclass, fields
+
+@dataclass
+class Parameters:
+        mode: str = None
+        verbosity: int = None
+        seed: int = None
+        dt: float = None
+        nr_w: int = None
+        A: int = None
+        c: float = None
+        it_nr: int = None
+        delay: int = None
+        theory_level: int = None
+        benchmark: int = None
+        localization: int = None
+        scf_sols: Sequence[int] = None
+        uniform: int = None
+        binning: int = None
+        dim: int = None
+        nr_scf: int = None
+
+class Parser2():
+        r"""Crude Input parser, reading arguments for a nomrci-qmc
+        calculation from an input file"""
+        def __init__(self, parameters: Parameters=None) -> None:
+                if parameters is not None: self.parameters = parameters
+                else: self.parameters = Parameters()
+
+        def parse(self, filename: str) -> dict:
+                r"""Extracts raw data from input file."""
+                with open(filename, 'r') as f:
+                        lines = f.readlines()
+                lines = [line.rstrip().partition('#') for line in lines]
+                lines = [line[0].split() for line in lines if line[0]!='']
+                
+                new_lines = []
+                for line in lines:
+                        if len(line[1:]) > 1:
+                                new = [self.adjust_type(l) for l in line[1:]]
+                        else:
+                                new = self.adjust_type(line[1])                                
+                        
+                        new_lines.append([line[0], new])
+                
+                self.compile(new_lines)
+                return self.parameters
+
+        def adjust_type(self, val: str):
+                try: val = int(val)                        
+                except ValueError:
+                        try: val = float(val)
+                        except ValueError: pass
+                return val
+
+        def compile(self, lines: Sequence[str]) -> None: 
+                r"""Compiles raw data into dictionary form readable
+                by the QMC code."""
+                for line in lines:
+                        setattr(self.parameters, line[0], line[1])
 
 class Parser():
         r"""Crude Input parser, reading arguments for a nomrci-qmc
@@ -54,7 +114,7 @@ def setup_workdir(workdir = None):
                 os.mkdir(workdir)
 
 if __name__ == '__main__':
-        parser = Parser()
+        parser = Parser2()
         filename = sys.argv[1]
         parser.parse(filename)
-                
+        print(parser.__dict__)                
