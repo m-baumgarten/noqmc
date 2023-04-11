@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from noqmc.utils.utilities import (
         Parser,
         setup_workdir,
+        Parameters
 )
 from noqmc.utils.plot import Plot
 
@@ -18,19 +19,19 @@ from pyscf.gto import Mole
 from pyscf import gto
 from qcmagic.auxiliary.qcmagic_standards import ZERO_TOLERANCE
 
-DEFAULT_CIQMC_ARGS = {
-    'mode': 'noci',
-    'verbosity': 1,
-    'seed': 69420,
-    'dt': 0.01,
-    'nr_w': 3000,
-    'A': 10,
-    'c': 0.01,
-    'it_nr': 50000,
-    'delay': 20000,
-    'theory_level': 1,
-    'benchmark': 1,
-}
+DEFAULT_CIQMC_ARGS = Parameters(
+    mode='noci',
+    verbosity=1,
+    seed=69420,
+    dt=0.01,
+    nr_w=3000,
+    A=10,
+    c=0.01,
+    it_nr=50000,
+    delay=20000,
+    theory_level=1,
+    benchmark=1,
+)
 
 THRESHOLDS = {
     'ov_zero_th':       5e-06,
@@ -44,19 +45,28 @@ class NOCIQMC(Propagator):
         """Object that wraps initialization of the system, running the 
         population dynamics, processing the results and performing a 
         blocking analysis on it."""
-        def __init__(self, mol: Mole, params=None):
+        def __init__(self, mol: Mole, params: Parameters=None):
                 if params is not None:
-                        if isinstance(params, dict):
+                        if isinstance(params, Parameters):
                                 params = params
+                        
+                        elif isinstance(params, dict):
+                                params_new = Parameters()
+                                for key, val in params.items():
+                                        setattr(params_new, key, val)
+                                params = params_new
+                        
                         elif isinstance(params, str):
                                 params = Parser().parse(params)
+                
                 else: params = DEFAULT_CIQMC_ARGS 
-                if 'workdir' not in params: params['workdir'] = 'output'
-                setup_workdir(params['workdir'])
+                
+                if params.workdir is None: params.workdir = 'output'
+                setup_workdir(params.workdir)
 
-                if 'scf_sols' not in params:
-                        params['scf_sols'] = [1,1,1]
-                params['nr_scf'] = sum(params['scf_sols'])
+                if params.scf_sols is None:
+                        params.scf_sols = [1,1,1]
+                params.nr_scf = sum(params.scf_sols)
 
                 self.params = params
                 self.initialize_log()
@@ -67,7 +77,7 @@ class NOCIQMC(Propagator):
 
         def initialize_log(self) -> None:
                 r""""""
-                filename = os.path.join(self.params['workdir'], 
+                filename = os.path.join(self.params.workdir, 
                                         f'nociqmc_{os.getpid()}.log')
                 logging.basicConfig(
                         filename=filename, #format='%(levelname)s: %(message)s', 
@@ -102,7 +112,7 @@ class NOCIQMC(Propagator):
                 able to extract the Shift, coefficients, projected energy,
                 matrix elements and an error analysis."""
                 self.postpr = Postprocessor(self.prop)
-                self.postpr.postprocessing(benchmark=self.params['benchmark'])
+                self.postpr.postprocessing(benchmark=self.params.benchmark)
                                 
                 self.statS = Statistics(self.prop.Ss, self.params)
                 self.statS.blockS = self.statS.analyse()

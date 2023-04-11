@@ -40,20 +40,20 @@ class Propagator(System):
 		:param system: System object containing information about Hilbert space"""
                 self.__dict__.update(system.__dict__)
                 
-                self.Nws = np.empty(self.params['it_nr'], dtype = int)
-                self.n = np.empty(self.params['it_nr'])
+                self.Nws = np.empty(self.params.it_nr, dtype = int)
+                self.n = np.empty(self.params.it_nr)
                 self.curr_it = 0
                 self.E_ref = self.E_HF
 
                 self.coeffs = np.zeros(
-                    [self.params['it_nr']+1, self.params['dim']], dtype = int
+                    [self.params.it_nr+1, self.params.dim], dtype = int
                 )
                 self.coeffs[0,:] = self.initial.copy()
                 
-                self.E_proj = np.empty(self.params['it_nr']+1)
+                self.E_proj = np.empty(self.params.it_nr+1)
                 self.E_proj[0] = self.E_NOCI - self.E_ref
 
-                self.Ss = np.empty(self.params['it_nr']+1)
+                self.Ss = np.empty(self.params.it_nr+1)
                 self.S = self.Ss[0] = 0
 
                 self.cluster_level = np.sum(self.reference[0].n_electrons)
@@ -62,7 +62,7 @@ class Propagator(System):
                         excitation = self.index_map_rev[0],excips = 0
                      )]
                 )
-                self.constS = self.params['c'] / ( self.params['A'] * self.params['dt'] )
+                self.constS = self.params.c / (self.params.A * self.params.dt)
 
         def generate_s(self) -> int:
                 r"""Determines Cluster size for population dynamics 
@@ -94,7 +94,7 @@ class Propagator(System):
 		:param c: Empirical daming parameter c
 		"""
                 N_new = self.Nws[self.curr_it]
-                N_old = self.Nws[self.curr_it - self.params['A']]
+                N_old = self.Nws[self.curr_it - self.params.A]
                 self.n[self.curr_it] = N_new / N_old
                 self.S -= self.constS * np.log(N_new / N_old)
 
@@ -152,7 +152,7 @@ class Propagator(System):
                 r"""Calculates and stores Hamiltonian and overlap matrix
                 elements."""
                 ii = None
-                if len(cluster.excitation[1][0] + cluster.excitation[1][1]) <= self.params['theory_level']:
+                if len(cluster.excitation[1][0] + cluster.excitation[1][1]) <= self.params.theory_level:
                         ii = self.index_map[cluster.excitation]
 
                 #if ii is not None:
@@ -212,14 +212,14 @@ class Propagator(System):
                                           (restrict js on dets in Hilbert space)
                 """
 
-                sp_coeffs = np.zeros(self.params['dim'], dtype = int) 
+                sp_coeffs = np.zeros(self.params.dim, dtype = int) 
                 coeffs = self.coeffs[self.curr_it, :]
                 nr_excips = int(np.linalg.norm(coeffs, ord=1))
                 
                 #prepare parameters specific for each SCF solution
                 coeffs_scf = np.array(
                     [coeffs[i*self.refdim:(i+1)*self.refdim] 
-                    for i in range(self.params['nr_scf'])]
+                    for i in range(self.params.nr_scf)]
                 )
                 nr_excips_scf = np.array(
                     [int(np.linalg.norm(c, ord=1)) for c in coeffs_scf]
@@ -246,7 +246,7 @@ class Propagator(System):
                 )
                 #TODO no need to get p_coeff_scf, normalization of p_interm can be done with nr_excips_compl
 
-                p_excit = 1/self.params['dim']
+                p_excit = 1/self.params.dim
 
                 #iterate over SCF sol. -> this way we pick determiants 
                 #with probabilities weighted by walker pops on their SCF sol.
@@ -277,7 +277,7 @@ class Propagator(System):
                         ])
                         
                         clusters_len = len(clusters)
-                        index_j = np.random.randint(0, self.params['dim'], 
+                        index_j = np.random.randint(0, self.params.dim, 
                                                     size=clusters_len)
                         rand_vars = np.random.random(size = clusters_len)
 
@@ -296,7 +296,7 @@ class Propagator(System):
                                 #calculate & store matrix elements
                                 H_ij, overlap_ij = self.cache_matelem(cluster, j, cl_nr)
 
-                                p_spawn = self.params['dt'] * (H_ij - self.S * overlap_ij) * the_whole_of_p * cluster.sign
+                                p_spawn = self.params.dt * (H_ij - self.S * overlap_ij) * the_whole_of_p * cluster.sign
                                 
                                 s_int = int(p_spawn)
                                 b = p_spawn - s_int
@@ -317,10 +317,10 @@ class Propagator(System):
         def run(self) -> None:
                 r"""Executes the population dynamics algorithm."""
                 
-                for i in range(self.params['it_nr']):
+                for i in range(self.params.it_nr):
                         self.Nw()
 
-                        SHIFT_UPDATE = i%self.params['A'] == 0 and i > self.params['delay']
+                        SHIFT_UPDATE = i%self.params.A == 0 and i > self.params.delay
                         if SHIFT_UPDATE: 
                                 #reevaluates S to stabilize # walkers
                                 self.Shift()

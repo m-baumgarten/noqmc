@@ -34,7 +34,7 @@ class Plot():
                 r"""Reads in data from a Postprocessor, which contains information
                 on the population dynamics."""
                 self.params = postpr.params
-                self.wd = lambda x: os.path.join(self.params['workdir'], x)
+                self.wd = lambda x: os.path.join(self.params.workdir, x)
                 self.__dict__.update(
                         {key: val 
                         for key,val in postpr.__dict__.items() 
@@ -59,7 +59,7 @@ class Plot():
 
         def plot_energy(self, ax) -> None:
                 params = self.params
-                x_axis = np.arange(params['it_nr'] + 1) * params['dt']
+                x_axis = np.arange(params.it_nr + 1) * params.dt
 
                 ax.plot(x_axis, self.data['E_proj'], label=r'$E(\tau)$')
                 ax.plot(x_axis, self.data['Ss'], label=r'$S(\tau)$')
@@ -81,11 +81,11 @@ class Plot():
                 key_coeff = 'coeffs_det_no0'
                 key_coeff_ad = 'coeffs_ad'
                 params = self.params
-                x_axis = np.arange(params['it_nr'] + 1) * params['dt']
+                x_axis = np.arange(params.it_nr + 1) * params.dt
                 
                 ##DETERMINANTS
 #                for i in range(self.max_lines):
-                for i in range(params['dim']):        
+                for i in range(params.dim):        
                         ax1.plot(x_axis, self.data[key_coeff][:,i], color = f'C{i}', 
                                 label=fr'$\langle D_{i}| \Psi \rangle$' if i <= self.max_lines else None
                         )
@@ -113,7 +113,7 @@ class Plot():
                 np.save(self.wd('coeffs_ad.npy'), self.data[key_coeff_ad])
 
         def plot_walkers(self, ax) -> None:
-                x_axis = np.arange(self.params['it_nr']) * self.params['dt']
+                x_axis = np.arange(self.params.it_nr) * self.params.dt
                 
                 ax.plot(x_axis, self.data['Nws'])
                 ax.set_xlabel(r'$\tau$')
@@ -143,8 +143,8 @@ class Plot():
                 pass
 
         def plot_nullspace(self, ax) -> None:
-                x_axis = np.arange(self.params['it_nr'] + 1) * self.params['dt']
-                for i in range(self.params['dim']):
+                x_axis = np.arange(self.params.it_nr + 1) * self.params.dt
+                for i in range(self.params.dim):
                         ax.plot(x_axis,
                                 self.data['nullspace_evol'][:,i], color = f'C{i}', 
                                 label=f'{i}' if i <= self.max_lines else None
@@ -158,7 +158,7 @@ class Plot():
 
         def plot_l1(self) -> None:
                 r""""""
-                x_axis = np.arange(self.params['it_nr'] + 1) * self.params['dt']
+                x_axis = np.arange(self.params.it_nr + 1) * self.params.dt
                 l1_tot = [np.linalg.norm(self.data['coeffs'][i,:], ord=1) for i in range(self.data['coeffs'].shape[0])]
                 l1_sub = [np.linalg.norm(self.data['coeffs'][i,:] - self.data['nullspace_evol'][i,:], ord=1) for i in range(self.data['coeffs'].shape[0])]
                 plt.plot(x_axis, l1_tot, label='Total')

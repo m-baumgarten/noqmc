@@ -1,6 +1,10 @@
 import numpy as np
 
-from noqmc.utils.utilities import Parser
+from noqmc.utils.utilities import (
+        Parser,
+        Parameters
+)
+
 from noqmc.utils.plot import Plot 
 
 from noqmc.nomrccmc.system import System
@@ -12,21 +16,21 @@ from pyscf.gto import Mole
 from pyscf import gto
 from qcmagic.auxiliary.qcmagic_standards import ZERO_TOLERANCE
 
-DEFAULT_DETERMINISTIC_ARGS = {
-        'mode': 'ref',
-        'verbosity': 1,
-        'seed': 69420,
-        'dt': 0.1,
-        'nr_w': 3000,
-        'A': 10,
-        'c': 0.01,
-        'it_nr': 21,
-        'delay': 20,
-        'theory_level': 2,
-        'benchmark': 1,
-        'localization': 0,
-        'nr_scf': 2,
-}
+DEFAULT_DETERMINISTIC_ARGS = Parameters(
+        mode='ref',
+        verbosity=1,
+        seed=69420,
+        dt=0.1,
+        nr_w=3000,
+        A=10,
+        c=0.01,
+        it_nr=21,
+        delay=20,
+        theory_level=2,
+        benchmark=1,
+        localization=0,
+        nr_scf=2,
+)
 
 THRESHOLDS = {
         'ov_zero_th':       5e-06,
@@ -37,10 +41,18 @@ class Deterministic(Propagator):
         __doc__ = """Executes the deterministic QMC power-method-like propagation.\n""" + Propagator.__doc__
         def __init__(self, mol: Mole, params = None):
                 if params is not None:
-                        if isinstance(params, dict):
+                        if isinstance(params, Parameters):
                                 params = params
+                        
+                        elif isinstance(params, dict):
+                                params_new = Parameters()
+                                for key, val in params.items():
+                                        setattr(params_new, key, val)
+                                params = params_new
+
                         elif isinstance(params, str):
                                 params = Parser().parse(params)
+
                 else: params = DEFAULT_DETERMINISTIC_ARGS 
  
                 self.params = params
@@ -70,7 +82,7 @@ class Deterministic(Propagator):
                 able to extract the Shift, coefficients, projected energy,
                 matrix elements and an error analysis."""
                 self.postpr = Postprocessor(self.prop)
-                self.postpr.postprocessing(benchmark = self.params['benchmark'])
+                self.postpr.postprocessing(benchmark = self.params.benchmark)
                                 
                 #self.stat = Statistics(self.prop.Ss, self.params)
                 #self.stat.analyse() 
@@ -104,8 +116,8 @@ if __name__ == '__main__':
                       ["He", 0., 0., 2.5 ],
                       ["He", 0., 0., 5.],
                       ["He", 0., 0., 7.5]],
-                basis = basis, verbose = 0,
-                unit = 'Angstrom'
+                basis=basis, verbose=0,
+                unit='Angstrom'
         )
 
 

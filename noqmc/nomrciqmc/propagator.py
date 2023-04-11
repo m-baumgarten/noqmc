@@ -49,19 +49,19 @@ class Propagator(System):
                 self.__dict__.update(system.__dict__)
                 
                 #Initialize Properties of the Propagator 
-                self.Nw_ov = np.empty(self.params['it_nr'], dtype = int)
-                self.Nws = np.empty(self.params['it_nr'], dtype = int)
+                self.Nw_ov = np.empty(self.params.it_nr, dtype = int)
+                self.Nws = np.empty(self.params.it_nr, dtype = int)
                 self.n = []
                 self.curr_it = 0
                 self.E_ref = self.E_HF
 
-                self.coeffs = np.zeros([self.params['it_nr']+1, self.params['dim']], dtype = int)
+                self.coeffs = np.zeros([self.params.it_nr+1, self.params.dim], dtype = int)
                 self.coeffs[0,:] = self.initial.copy()
 
-                self.E_proj = np.empty(self.params['it_nr']+1)
+                self.E_proj = np.empty(self.params.it_nr+1)
                 self.E_proj[0] = self.E_NOCI - self.E_ref
 
-                self.Ss = np.empty(self.params['it_nr']+1)
+                self.Ss = np.empty(self.params.it_nr+1)
                 self.S = self.Ss[0] = 0
 
         def E(self) -> None:
@@ -87,9 +87,9 @@ class Propagator(System):
 		:param c: Empirical daming parameter c
 		"""
                 N_new = self.Nw_ov[self.curr_it]
-                N_old = self.Nw_ov[self.curr_it - self.params['A']]
+                N_old = self.Nw_ov[self.curr_it - self.params.A]
                 self.n.append(N_new/N_old)
-                self.S -= self.params['c'] / (self.params['A'] * self.params['dt']) * np.log(N_new / N_old)
+                self.S -= self.params.c / (self.params.A * self.params.dt) * np.log(N_new / N_old)
 
         def Nw(self) -> None:
                 r"""Updates total number of walkers resident outside 
@@ -104,7 +104,7 @@ class Propagator(System):
                 r"""Spawning/Death in one step due to nonorthogonality. 
 		Writes changes to current wavefunction to sp_coeffs.
                 """
-                sp_coeffs = np.zeros(self.params['dim'], dtype=int)
+                sp_coeffs = np.zeros(self.params.dim, dtype=int)
 
                 for i,coeff in enumerate(self.coeffs[self.curr_it, :]):
                        
@@ -113,7 +113,7 @@ class Propagator(System):
                         sign_coeff = np.sign(coeff)
                         
                         #Uniform Excitation Generation -> TODO Generalize
-                        js = np.random.randint(0, self.params['dim'], size=abs(coeff))
+                        js = np.random.randint(0, self.params.dim, size=abs(coeff))
 
                         #Prepare self.H and self.overlap:
                         key_i = self.index_map_rev[i]
@@ -141,7 +141,7 @@ class Propagator(System):
                                 self.overlap[i,j], self.overlap[j,i] = elem[2:]
 
                         spawning_probs = [
-                            self.params['dim'] * self.params['dt'] 
+                            self.params.dim * self.params.dt 
                             * (self.H[i,j] - self.S * self.overlap[i,j])
                             for j in set_js
                         ]
@@ -153,14 +153,14 @@ class Propagator(System):
                                 s_int += (r < np.abs(b)) * np.sign(b)
                                 sp_coeffs[j] -= sign_coeff * s_int
                                 
-                                if 'binning' in self.params:                               
+                                if self.params.binning:                               
                                         self.bin[i, j] -= sign_coeff * s_int
-                                        self.pgen[i,j] = 1/self.params['dim']
+                                        self.pgen[i,j] = 1/self.params.dim
                 #Annihilation
                 self.coeffs[self.curr_it+1, :] = sp_coeffs
                 self.coeffs[self.curr_it+1, :] += self.coeffs[self.curr_it, :]
 
-                if self.params['verbosity']:
+                if self.params.verbosity:
                         print(f'{self.curr_it}. Nw & S:      ',
                             np.linalg.norm(self.coeffs[self.curr_it+1, :], ord=1), 
                             self.S 
@@ -168,7 +168,7 @@ class Propagator(System):
 
         def pop_dynamics_exc(self) -> None:
                 r""""""
-                sp_coeffs = np.zeros(self.params['dim'], dtype=int)
+                sp_coeffs = np.zeros(self.params.dim, dtype=int)
 
                 for i,coeff in enumerate(self.coeffs[self.curr_it, :]):
                         
@@ -203,7 +203,7 @@ class Propagator(System):
                                 self.overlap[i,j], self.overlap[j,i] = elem[2:]
 
                         spawning_probs = [
-                            self.params['dt'] * (self.H[i,j] - self.S * self.overlap[i,j]) / p
+                            self.params.dt * (self.H[i,j] - self.S * self.overlap[i,j]) / p
                             for j,p in zip(set_js, pgens)
                         ]
                         rand_vars = np.random.random(size=(len(spawning_probs)))
@@ -214,10 +214,10 @@ class Propagator(System):
                                 s_int += (r < np.abs(b)) * np.sign(b)
                                 sp_coeffs[j] -= sign_coeff * s_int
 
-                                if 'binning' in self.params:
+                                if self.params.binning:
                                         self.bin[i, j] -= sign_coeff * s_int
                                         
-                        if 'binning' in self.params:
+                        if self.params.binning:
                                 for j,p in zip(set_js, pgens):
                                         if self.pgen[i, j] != p and self.pgen[i, j] != 0:
                                                 print('pgen & p:', self.pgen[i, j], p)
@@ -243,7 +243,7 @@ class Propagator(System):
                 self.coeffs[self.curr_it+1, :] = sp_coeffs
                 self.coeffs[self.curr_it+1, :] += self.coeffs[self.curr_it, :]
 
-                if self.params['verbosity']:
+                if self.params.verbosity:
                         print(f'{self.curr_it}. Nw & S:      ',
                             np.linalg.norm(self.coeffs[self.curr_it+1, :], ord=1),
                             self.S
@@ -260,7 +260,7 @@ class Propagator(System):
                 if size==0:
                         return [], np.array([])
 
-                scf_spawn = np.random.randint(0, self.params['nr_scf'], size=size)
+                scf_spawn = np.random.randint(0, self.params.nr_scf, size=size)
                 # 1. Prepare MO list for ex_str:
                 excited_det = self.generate_det(ex_str)
                 # indices will contain the MO indices corresponding to an ex_str, 
@@ -272,7 +272,7 @@ class Propagator(System):
                 out = []
                 p = []
                 for s in scf_spawn:
-                        pgen = 1./self.params['nr_scf']
+                        pgen = 1./self.params.nr_scf
                         
                         if s == ex_str[0]:
                                 #Let's first try with a uniform sampling scheme:
@@ -369,29 +369,28 @@ class Propagator(System):
                         spin.sort()
                 ex = [tuple(spin) for spin in ex]
                 level = sum([len(s) for s in ex]) 
-                return tuple(dex), tuple(ex), level <= self.params['theory_level']
+                return tuple(dex), tuple(ex), level <= self.params.theory_level
 
         def run(self) -> None:
                 r"""Executes the FCIQMC algorithm.
                 """
                 
                 pop_dyn = self.population_dynamics
-                if 'uniform' in self.params:
-                        assert(self.params['localization'])
-                        if not self.params['uniform']:
-                                pop_dyn = self.pop_dynamics_exc
-                                logger.info('Using localized excitation generation scheme!')
+                if not self.params.uniform:
+                        assert(self.params.localization)
+                        pop_dyn = self.pop_dynamics_exc
+                        logger.info('Using localized excitation generation scheme!')
 
-                if 'binning' in self.params:
+                if self.params.binning:
                         self.bin = np.zeros_like(self.H)
                         self.pgen = np.zeros_like(self.H)
 
-                for i in range(self.params['it_nr']):
+                for i in range(self.params.it_nr):
 
                         #Only measure Number of Walkers outside of ker(S)
                         self.Nw()
                         
-                        SHIFT_UPDATE = i%self.params['A'] == 0 and i > self.params['delay']
+                        SHIFT_UPDATE = i%self.params.A == 0 and i > self.params.delay
                         if SHIFT_UPDATE: 
                                 self.Shift()
                         self.Ss[self.curr_it+1] = self.S
@@ -401,6 +400,6 @@ class Propagator(System):
                         self.E()
                         self.curr_it += 1
 
-                if 'binning' in self.params:
-                        np.save(os.path.join(self.params['workdir'],'bin.npy'), self.bin)
-                        np.save(os.path.join(self.params['workdir'],'pgen.npy'), self.pgen)
+                if self.params.binning:
+                        np.save(os.path.join(self.params.workdir,'bin.npy'), self.bin)
+                        np.save(os.path.join(self.params.workdir,'pgen.npy'), self.pgen)

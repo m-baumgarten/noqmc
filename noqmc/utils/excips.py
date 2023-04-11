@@ -8,7 +8,11 @@
 #Based on Thom [2009], and Spencer and Thom [2016]
 
 import numpy as np
-from typing import Tuple, Sequence
+from typing import (
+        Tuple, 
+        Sequence, 
+        NamedTuple
+)
 from sympy.combinatorics.permutations import Permutation
 from functools import reduce
 
@@ -26,14 +30,10 @@ from functools import reduce
 #
 #       Additional: Sample projected energy
 
-class Excitation(typing.NamedTuple):
+class Excitation(NamedTuple):
         scf: int
         dex: Tuple[Sequence[int], Sequence[int]]
         ex: Tuple[Sequence[int], Sequence[int]]
-
-@dataclasses.dataclass
-class Parameters:
-        pass
 
 class Excitor(): #Again, this class is not necessary as we can store everything in an array of integers 
         r"""Normal ordered walkers comprised of their excitation and their 
