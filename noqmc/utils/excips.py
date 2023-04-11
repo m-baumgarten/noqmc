@@ -31,9 +31,12 @@ from functools import reduce
 #       Additional: Sample projected energy
 
 class Excitation(NamedTuple):
+        r"""Encodes excitation with respect to a certain SCF solution."""
         scf: int
-        dex: Tuple[Sequence[int], Sequence[int]]
-        ex: Tuple[Sequence[int], Sequence[int]]
+        dex_a: Sequence[int]
+        dex_b: Sequence[int]
+        ex_a: Sequence[int]
+        ex_b: Sequence[int]
 
 class Excitor(): #Again, this class is not necessary as we can store everything in an array of integers 
         r"""Normal ordered walkers comprised of their excitation and their 
@@ -61,11 +64,6 @@ class Cluster():        #TODO: ADJUST FOR excitor == []
                 ) #we don't want to excite between different SCF solutions
                 self.size = None 
                 self.p = None
-                #self.amplitude = None
-                #self.cluster = None
-                #self.sign = None
-                #self.in_hilbert = None
-                #self.excitation_level = 2 #TODO this should be the number of e-
 
         def collapse(self):        
                 r"""Collapses a sequence of Excitors on 
@@ -108,22 +106,6 @@ class Cluster():        #TODO: ADJUST FOR excitor == []
                 s = sequence[index]
                 p = Permutation(index).is_even
                 return s, p
-                #if p: return s, 1
-                #else: return s,-1
-
-#        def sort_old(self, sequence: Sequence):
-#                s = np.sort(sequence)
-#                parity = self.is_even(sequence) #this isnt great as is sorts again essentially
-#                return s, parity
-
-#        def is_even(self, sequence: Sequence) -> bool:
-#                r"""Returns True is sequence is even, False otherwise."""
-#                count = 0
-#                for i, num in enumerate(sequence, start=1):
-#                        count += sum(num>num2 for num2 in sequence[i:])
-#                if not count % 2: return 1
-#                else: return -1
-                #return not count % 2
 
         def is_in_hilbert(self) -> bool: #as long as we are using an indexmap 
                                          #we dont need that function
@@ -133,20 +115,17 @@ class Cluster():        #TODO: ADJUST FOR excitor == []
                 self.in_hilbert = len(flat) == self.excitation_level
                 return self.in_hilbert
         
-        #Have a function that determines whether this is a cluster that is able
-        #to carry excips (i.e. is in Hilbert space) 
-
 
 def flatten(seq: Sequence) -> Sequence:
         return np.array([s for sub in seq for s in sub])
 
 if __name__ == '__main__':
-        ex1 = Excitor(excitation = [0, [[0,3],[1,2]], [[6,8],[9,10]]], excips = 0)
-        ex2 = Excitor(excitation = [0, [[2],[0,3]], [[5],[6,11]]], excips = 0)
+        ex1 = Excitor(excitation=[0, [[0,3],[1,2]], [[6,8],[9,10]]], excips=0)
+        ex2 = Excitor(excitation=[0, [[2],[0,3]], [[5],[6,11]]], excips=0)
         
-        ex1 = Excitor(excitation = (0, ((0,3),(1,2)), ((6,8),(9,10))), excips = 0)
-        ex2 = Excitor(excitation = (0, ((2,),(0,3)), ((5,),(6,11))), excips = 0)
-        cluster = Cluster(excitors = [ex1, ex2])
+        ex1 = Excitor(excitation=(0, ((0,3),(1,2)), ((6,8),(9,10))), excips=0)
+        ex2 = Excitor(excitation=(0, ((2,),(0,3)), ((5,),(6,11))), excips=0)
+        cluster = Cluster(excitors=[ex1, ex2])
         collapsed = cluster.collapse()
         print(collapsed)
 
