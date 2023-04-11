@@ -123,6 +123,8 @@ def generate_scf(mol, scf_sols, init_guess_rhf=None, init_guess_uhf=None,
                         #a = sol.mulliken_pop()
                         #print('Mulliken Charges:        ', a)
         
+        rhf = scf.RHF(mol)
+        erhf = rhf.kernel()
         dump_fci_ccsd(rhf, workdir=workdir)
 
         return scf_solutions

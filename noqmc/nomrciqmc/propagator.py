@@ -377,8 +377,8 @@ class Propagator(System):
                 
                 pop_dyn = self.population_dynamics
                 if 'uniform' in self.params:
-                        assert(self.params['localization'])
                         if not self.params['uniform']:
+                                assert(self.params['localization'])
                                 pop_dyn = self.pop_dynamics_exc
                                 logger.info('Using localized excitation generation scheme!')
 
