@@ -3,7 +3,6 @@ import numpy as np
 from pyscf import gto
 import noqmc.nomrciqmc as no
 
-
 def get_init_guess_LiH(r: float):
         r""""""
         mol_data = np.load(
@@ -60,13 +59,13 @@ if __name__ == '__main__':
                 'dt': 0.01,
                 'nr_w': 1000,
                 'A': 12, 
-                'c': 0.03,
+                'c': 0.04,
                 'it_nr': 8000,
                 'delay': 2000,
                 'theory_level': 1,
                 'benchmark': 1,
                 'localization': 0,
-                'scf_sols': [0,1,1],
+                'scf_sols': [1,1,1],
                 'uniform': 1,
                 'binning': 1,
         }

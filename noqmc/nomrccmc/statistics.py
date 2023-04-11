@@ -21,9 +21,9 @@ class Statistics():
                 self.params = params
                 self.Ss = Ss
                 self.i = -1 + int(
-                    np.log2(self.params['it_nr'] - self.params['delay'])
+                    np.log2(self.params.it_nr - self.params.delay)
                 ) -1
-                self.S = np.array(Ss[self.params['it_nr'] - 2**self.i + 1 : ])
+                self.S = np.array(Ss[self.params.it_nr - 2**self.i + 1 : ])
                 self.n = len(self.S)
 
         def analyse(self, data: np.ndarray = None) -> int:

@@ -43,13 +43,13 @@ class Propagator(System):
                 self.__dict__.update(system.__dict__)
                 self.E_ref = self.E_HF
                 
-                self.E_proj = np.empty(self.params['it_nr']+1)
+                self.E_proj = np.empty(self.params.it_nr+1)
                 self.E_proj[0] = self.E_NOCI - self.E_ref        
 
-                self.Ss = np.empty(self.params['it_nr']+1)
-                self.Nws = np.empty(self.params['it_nr'], dtype = int)
+                self.Ss = np.empty(self.params.it_nr+1)
+                self.Nws = np.empty(self.params.it_nr, dtype = int)
                 self.coeffs = np.zeros(
-                    [self.params['it_nr']+1, self.params['dim']]
+                    [self.params.it_nr+1, self.params.dim]
                 )
                 self.coeffs[0,:] = norm(self.initial.copy())
                 
@@ -91,7 +91,7 @@ class Propagator(System):
                         self.overlap[i,j] = processes[(i,j)][2]
                         self.overlap[j,i] = processes[(i,j)][3]
 
-                self.propagator = np.eye(self.params['dim']) - self.params['dt'] * self.H
+                self.propagator = np.eye(self.params.dim) - self.params.dt * self.H
 
         def E(self) -> None:
                 r"""Calculates energy estimator at current iteration."""
@@ -123,7 +123,7 @@ class Propagator(System):
                 r"""Executes what is essentially the power method.
                 """
                 self.calculate_operators()                
-                for i in range(self.params['it_nr']):
+                for i in range(self.params.it_nr):
                         self.curr_it = i
                         self.Nws[self.curr_it] = sum([int(np.round(np.abs(c))) for c in self.coeffs[self.curr_it, :]])
                         self.population_dynamics()

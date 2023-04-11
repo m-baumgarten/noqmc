@@ -90,8 +90,8 @@ class Postprocessor(Propagator):
  #                               processes[key] = value.get()
  #                               self.H[i,j], self.H[j,i], self.overlap[i,j], self.overlap[j,i] = processes[key]
 
-                np.save(os.path.join(self.params['workdir'], 'overlap.npy'), self.overlap)
-                np.save(os.path.join(self.params['workdir'], 'Hamiltonian.npy') , self.H)
+                np.save(os.path.join(self.params.workdir, 'overlap.npy'), self.overlap)
+                np.save(os.path.join(self.params.workdir, 'Hamiltonian.npy') , self.H)
 
                 self.ov_eigval ,self.ov_eigvec = la.eigh(self.overlap)
                 self.eigvals, self.eigvecs, projector_mat = eigh_overcomplete_noci(self.H, self.overlap, self.ov_eigval, self.ov_eigvec)
@@ -199,7 +199,7 @@ class Postprocessor(Propagator):
                 )
                 
                 #Projection onto different eigenstates
-                if self.params['benchmark']:
+                if self.params.benchmark:
                         #Define adiabatic basis
                         A = np.concatenate(
                             (self.eigvecs, self.get_subspace(0.)), axis=1
@@ -227,7 +227,7 @@ class Postprocessor(Propagator):
                 null = self.get_subspace(0.).shape[1]
                 not_null = self.eigvecs.shape[1]
                 self.null_adiab = proj_with_0[:, -null:].copy()
-                self.null_zeros = np.zeros((self.params['it_nr']+1, not_null))                
+                self.null_zeros = np.zeros((self.params.it_nr+1, not_null))                
                 self.null_adiab = np.concatenate((self.null_zeros, self.null_adiab), axis = 1)
                 
                 #back transform adiabatic contirbutions to overcomplete determinant basis

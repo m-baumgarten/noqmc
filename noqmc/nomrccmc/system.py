@@ -41,6 +41,7 @@ from noqmc.utils.calc_util import (
     invert_MO_AO,
 )
 from noqmc.utils.fragmentation import fragment
+from noqmc.utils.utilities import Parameters
 
 ####THRESHOLDS#####
 THRESHOLDS = {'ov_zero_th':       5e-06,
@@ -54,19 +55,19 @@ logger.setLevel(logging.INFO)
 class System():
         r"""...
 	"""
-        def __init__(self, mol: Mole, params: dict) -> None:
+        def __init__(self, mol: Mole, params: Parameters) -> None:
                 r"""A system corresponding to a provided Hamiltonian. 
 		Specifies a Hilbert space basis.
 
 		:param params: dictionary of time step, shift damping,
 			       walker number, delay, verbosity and 
 			       random seed"""
-                assert params['delay'] > params['A']
+                assert params.delay > params.A
 
                 self.mol = mol
                 print(mol.ao_labels())
                 self.params = params
-                np.random.seed(self.params['seed'])
+                np.random.seed(self.params.seed)
                 self.overlap = None     #shape dim,dim
                 self.initial = None #np.empty shape dim
                 self.E_NOCI = None
@@ -77,11 +78,11 @@ class System():
         def get_reference(self, guess_rhf: np.ndarray, guess_uhf: np.ndarray) -> Sequence:
                 r""""""
                 refs = generate_scf(
-                    mol=self.mol, scf_sols=self.params['scf_sols'], 
+                    mol=self.mol, scf_sols=self.params.scf_sols, 
                     init_guess_rhf=guess_rhf, 
                     init_guess_uhf=guess_uhf,
-                    workdir=self.params['workdir'],
-                    localization=self.params['localization'],
+                    workdir=self.params.workdir,
+                    localization=self.params.localization,
                 )
                 
                 self.enuc = refs[0].scf_summary['nuc']
@@ -93,9 +94,9 @@ class System():
 
                 self.reference = scfarray_to_state(refs)
                 self.MO_AO_map = get_MO_AO(self.reference)
-                self.MO_AO_inv = invert_MO_AO(self.MO_AO_map, self.scfdim, self.params['nr_scf'])
+                self.MO_AO_inv = invert_MO_AO(self.MO_AO_map, self.scfdim, self.params.nr_scf)
 
-                assert self.params['theory_level'] <= sum(self.reference[0].n_electrons)
+                assert self.params.theory_level <= sum(self.reference[0].n_electrons)
 
                 self.cbs = self.reference[0].configuration.get_subconfiguration("ConvolvedBasisSet")
 
@@ -106,11 +107,11 @@ class System():
                 :param mode: Specifies the type of initial guess. Default is noci.
                 """
 
-                self.initial = np.zeros(shape=self.params['dim'], dtype=int)
+                self.initial = np.zeros(shape=self.params.dim, dtype=int)
 
                 if mode == 'noci':
                         noci_H = np.zeros(
-                            shape=(self.params['nr_scf'], self.params['nr_scf'])
+                            shape=(self.params.nr_scf, self.params.nr_scf)
                         )
                         noci_overlap = np.zeros_like(noci_H)
                         
@@ -129,13 +130,13 @@ class System():
                         self.E_NOCI = self.noci_eigvals[0]
                         
                         norm_noci = np.linalg.norm(self.noci_eigvecs[:,0], ord=1)
-                        for i in range(self.params['nr_scf']):        
-                                nr = int(self.params['nr_w'] * self.noci_eigvecs[i,0] / norm_noci)
+                        for i in range(self.params.nr_scf):        
+                                nr = int(self.params.nr_w * self.noci_eigvecs[i,0] / norm_noci)
                                 self.initial[self.refdim * i] = nr
 
                 elif mode == 'ref':
-                        nr = int(self.params['nr_w'] / self.params['nr_scf'])
-                        for i in range(self.params['nr_scf']):
+                        nr = int(self.params.nr_w / self.params.nr_scf)
+                        for i in range(self.params.nr_scf):
                                 self.initial[self.refdim * i] = nr
                         self.E_NOCI = np.mean(E_HF(self.refs_scfobj))
                 
@@ -166,7 +167,7 @@ class System():
                 fragments = fragment(self.sao)
 
                 self.fragments = {i: list(frag) for i, frag in enumerate(fragments)}
-                self.fragmap = [[{i: [] for i in self.fragments} for _ in range(2)] for _ in range(self.params['nr_scf'])]
+                self.fragmap = [[{i: [] for i in self.fragments} for _ in range(2)] for _ in range(self.params.nr_scf)]
                 self.fragmap_inv = {}
 
                 for i, scf in enumerate(self.reference):
@@ -215,7 +216,7 @@ class System():
                 for a certain level of theory."""
                 
                 index = 0
-                self.HilbertSpaceDim = np.zeros(self.params['theory_level'] + 1, dtype = int)
+                self.HilbertSpaceDim = np.zeros(self.params.theory_level + 1, dtype = int)
                 for nr_scf, ref in enumerate(self.reference):
                         n_e = ref.n_electrons
                         ref_virs = ref.virtual_coefficients
@@ -226,7 +227,7 @@ class System():
                         virs_beta = range(n_e[1], n_e[1]+ref_virs[1].shape[1])
                         
                         #iterates over single, double, ... excitations 
-                        for level in np.arange(0, self.params['theory_level'] + 1):
+                        for level in np.arange(0, self.params.theory_level + 1):
                                 for n_alpha in range(level+1):
                                         n_beta = int(level - n_alpha)
                                         if n_alpha > n_e[0] or n_beta > n_e[1]: continue
@@ -242,12 +243,12 @@ class System():
 
                 self.index_map_rev = dict((v,k) for k,v in self.index_map.items())
 
-                self.params['dim'] = int(np.sum(self.HilbertSpaceDim))
-                self.refdim = self.params['dim'] // self.params['nr_scf']
+                self.params.dim = int(np.sum(self.HilbertSpaceDim))
+                self.refdim = self.params.dim // self.params.nr_scf
 
-                borders = [i*self.refdim for i in range(self.params['nr_scf']+1)]
+                borders = [i*self.refdim for i in range(self.params.nr_scf+1)]
                 self.scf_spaces = [range(borders[i], borders[i+1]) 
-                                   for i in range(self.params['nr_scf'])]
+                                   for i in range(self.params.nr_scf)]
 
                 self.ref_indices = borders[:-1]
                 
@@ -255,9 +256,9 @@ class System():
                         self.H = np.load('Hamiltonian.npy')
                         self.overlap = np.load('overlap.npy')
                 else:
-                        self.H = np.full((self.params['dim'], self.params['dim']), np.nan)
-                        print('DIM:     ', self.params['dim'])
-                        self.overlap = np.full((self.params['dim'], self.params['dim']), np.nan)
+                        self.H = np.full((self.params.dim, self.params.dim), np.nan)
+                        print('DIM:     ', self.params.dim)
+                        self.overlap = np.full((self.params.dim, self.params.dim), np.nan)
         
                 self.H_dict = {}
 
@@ -298,12 +299,12 @@ class System():
                 n_virt_a = reference.virtual_coefficients[0].shape[1]
                 n_virt_b = reference.virtual_coefficients[1].shape[1]
                  
-                assert(n_occ_a + n_occ_b >= self.params['theory_level'])
+                assert(n_occ_a + n_occ_b >= self.params.theory_level)
                 
                 self.subspace_partitioning = []
                 
                 #iterates over single, double, ... excitations 
-                for level in np.arange(0, self.params['theory_level'] + 3):
+                for level in np.arange(0, self.params.theory_level + 3):
                         dim_tmp = []
                         for n_a in range(level+1):
                                 n_b = int(level - n_a)
@@ -331,40 +332,13 @@ class System():
                     for a SCF solution: {self.subspace_partitioning}'
                 )
 
-        def allowMOexcitation(self, ex_str) -> bool:
-                r""""""
-                nr_scf = ex_str[0]
-                a_MO_dex = ex_str[1][0]
-                a_MO_ex = ex_str[2][0]
-                b_MO_dex = ex_str[1][1]
-                b_MO_ex = ex_str[2][1]
-
-                a_MO_dex = [self.getMOindex(nr_scf, mo, 0) for mo in a_MO_dex]
-                a_MO_ex = [self.getMOindex(nr_scf, mo, 0) for mo in a_MO_ex]
-                b_MO_dex = [self.getMOindex(nr_scf, mo, 1) for mo in b_MO_dex]
-                b_MO_ex = [self.getMOindex(nr_scf, mo, 1) for mo in b_MO_ex]
-
-                for a_d, a_e in zip(a_MO_dex, a_MO_ex):
-                        if np.abs(a_d - a_e) >= 1:
-                                return False
-                for b_d, b_e in zip(b_MO_dex, b_MO_ex):
-                        if np.abs(b_d - b_e) >= 1:
-                                return False
-
-                return True
-
-        def getMOindex(self, nr_scf, mo, spinspace) -> int:
-                r""""""
-                index = nr_scf*2*self.scfdim + spinspace*self.scfdim + mo
-                return index
-
         def initialize(self) -> None:
                 r""""""
                 self.initialize_indexmap()
                 self.initialize_sao_hcore()
                 self.initialize_frag_map()
                 self.get_dimensions()
-                self.initialize_walkers(mode=self.params['mode'])
+                self.initialize_walkers(mode=self.params.mode)
 
 def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet, 
                   enuc: float, sao: np.ndarray, hcore: float, E_ref: float, 
