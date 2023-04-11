@@ -58,15 +58,17 @@ if __name__ == '__main__':
                 'verbosity': 1,
                 'seed': 69420,
                 'dt': 0.01,
-                'nr_w': 400,
+                'nr_w': 3000,
                 'A': 12, 
-                'c': 0.01,
-                'it_nr': 8000,
-                'delay': 2000,
+                'c': 0.02,
+                'it_nr': 10000,
+                'delay': 4000,
                 'theory_level': 1,
                 'benchmark': 1,
                 'localization': 1,
-                'scf_sols': [1,1,1]
+                'scf_sols': [1,1,0],
+                'uniform': 0,
+                'binning': 1,
         }
 
 

@@ -11,7 +11,7 @@ Based on Booth, Thom and Alavi [2009], and Thom and Head-Gordon [2008]
 import logging
 import numpy as np
 from scipy.special import binom
-import sys
+import os
 from typing import (
     Tuple, 
     Sequence,
@@ -152,7 +152,10 @@ class Propagator(System):
                                 b = ps_s - s_int
                                 s_int += (r < np.abs(b)) * np.sign(b)
                                 sp_coeffs[j] -= sign_coeff * s_int
-
+                                
+                                if 'binning' in self.params:                               
+                                        self.bin[i, j] -= sign_coeff * s_int
+                                        self.pgen[i,j] = 1/self.params['dim']
                 #Annihilation
                 self.coeffs[self.curr_it+1, :] = sp_coeffs
                 self.coeffs[self.curr_it+1, :] += self.coeffs[self.curr_it, :]
@@ -168,6 +171,7 @@ class Propagator(System):
                 sp_coeffs = np.zeros(self.params['dim'], dtype=int)
 
                 for i,coeff in enumerate(self.coeffs[self.curr_it, :]):
+                        
                         excited_str, pgens = self.excitation(ex_str=self.index_map_rev[i], size=abs(coeff))
                         js = [self.index_map[s] for s in excited_str]
 
@@ -182,7 +186,7 @@ class Propagator(System):
                         )
                         pgens = pgens[index]
 
-                        for j,p in zip(set_js, pgens):
+                        for j in set_js:
                                 MAT_ELEM_CACHED = not np.isnan(self.H[i,j])
                                 if MAT_ELEM_CACHED:
                                         continue
@@ -210,6 +214,31 @@ class Propagator(System):
                                 s_int += (r < np.abs(b)) * np.sign(b)
                                 sp_coeffs[j] -= sign_coeff * s_int
 
+                                if 'binning' in self.params:
+                                        self.bin[i, j] -= sign_coeff * s_int
+                                        
+                        if 'binning' in self.params:
+                                for j,p in zip(set_js, pgens):
+                                        if self.pgen[i, j] != p and self.pgen[i, j] != 0:
+                                                print('pgen & p:', self.pgen[i, j], p)
+                                        self.pgen[i, j] = p
+                        
+
+                        ##REMOVE THIS TODO
+                      #  for i in range(self.params['dim']):
+                      #  
+                      #          excited_str, pgens = self.excitation(ex_str=self.index_map_rev[i], size=100)
+                      #          js = [self.index_map[s] for s in excited_str]
+                      #          set_js, index, counts = np.unique(
+                      #                  js, return_index=True, return_counts=True
+                      #          )
+                      #          pgens = pgens[index]
+                      #          for j,p in zip(set_js, pgens):
+                      #                  self.pgen[i, j] = p
+                      #          np.save(os.path.join(self.params['workdir'],'pgen.npy'), self.pgen)
+                      #  exit()
+                        #########
+
                 #Annihilation
                 self.coeffs[self.curr_it+1, :] = sp_coeffs
                 self.coeffs[self.curr_it+1, :] += self.coeffs[self.curr_it, :]
@@ -227,9 +256,11 @@ class Propagator(System):
                 :params nr:  Number of excitations we wish to generate
                 
                 :returns: array of keys and array of generation probabilities"""
-                scf_spawn = np.random.randint(0, self.params['nr_scf'], size=size)
-                print(self.fragmap)
+                #Potentially exchange this with SCF transition matrix 
+                if size==0:
+                        return [], np.array([])
 
+                scf_spawn = np.random.randint(0, self.params['nr_scf'], size=size)
                 # 1. Prepare MO list for ex_str:
                 excited_det = self.generate_det(ex_str)
                 # indices will contain the MO indices corresponding to an ex_str, 
@@ -255,19 +286,12 @@ class Propagator(System):
                                 sample_rule = [np.unique(spin, return_counts=True) for spin in frags]
 
                                 # 2. sample MOs according to sample_rule and produce correct pgen
-                                mo_sspace = []
-                                for i_s, spin in enumerate(sample_rule):
-                                        ind, freq = spin
-                                        frags = self.fragmap[s][i_s]
-                                       
-                                        mo = []
-                                        for i, n in zip(ind, freq):
-                                                print(n, frags[i])
-                                                mo.append(np.random.choice(frags[i], size=n, replace=False))
-                                                pgen *= 1/binom(len(frags[i]), n)
-                                        mo = np.concatenate(mo)
-                                        mo_sspace.append(mo)
-                                
+                                mo_sspace, pgen_mo, localized_on_frag = self.sample_mos(scf=s, rule=sample_rule)
+                               
+                                if not localized_on_frag:
+                                        continue
+
+                                pgen *= pgen_mo
                                 dexcits, excits, allowed = self.collapse(mo_sspace, excited_det.n_electrons)
                                 #print(dexcits, excits, allowed)
 
@@ -278,10 +302,58 @@ class Propagator(System):
                         
                         out.append(new_str)
                         p.append(pgen)
-                #print(out, p)
-                #exit()
+                
                 return out, np.array(p)
 
+        def sample_mos(self, scf: int, rule: np.ndarray) -> (list, float, bool):
+                r""""""
+                mo_sspace = []
+                localized_on_frag = True
+                pgen = 1.
+
+                for i_s, spin in enumerate(rule):
+                        
+                        mo = []
+                        ind, freq = spin
+                        frags = self.fragmap[scf][i_s]                                       
+                                
+                        (ind, freq), ploc = self.excite_local(ind, freq)
+                        pgen *= ploc
+                        #print(ind, freq)
+                        #Ensure necessary amount of electrons is localized on all 
+                        #necessary fragments goverened by the determinant we spawn from
+                        #print(frags, ind, freq)
+                        for j,i in enumerate(ind):
+                                if i not in frags:
+                                        return [], 0.0, False
+                                if len(frags[i]) < freq[j]:
+                                        return [], 0.0, False
+
+                        for i, n in zip(ind, freq):
+                                mo.append(np.random.choice(frags[i], size=n, replace=False))
+                                pgen *= 1/binom(len(frags[i]), n)
+                        
+                        mo = np.concatenate(mo)
+                        mo_sspace.append(mo)
+ 
+                return mo_sspace, pgen, True
+
+        def excite_local(self, ind: np.ndarray, freq:np.ndarray) -> Tuple[Tuple[np.ndarray, np.ndarray], float]:
+                r"""Decides whether to excited one electron to a nearest neighbor fragment
+                and returns the resulting new fragment configuration with corresponding
+                frequencies."""
+                dont_excite = np.round(np.random.random())   #create binary number
+                
+                if dont_excite:
+                        return (ind, freq), 0.5
+                
+                localized = np.repeat(ind, freq)
+                l = len(localized)
+                ploc = 1/l
+                excited = np.random.choice(range(l))  #is sum(freq) faster?                              
+                localized[excited] += 1 - 2 * int(np.round(np.random.random()))
+                
+                return np.unique(localized, return_counts=True), 0.5*ploc
 
         def collapse(self, indices: list, n_e: list) -> (list, bool):
                 r"""Evaluates whether a set of MO indices is within the Hilbert space
@@ -310,6 +382,10 @@ class Propagator(System):
                                 pop_dyn = self.pop_dynamics_exc
                                 logger.info('Using localized excitation generation scheme!')
 
+                if 'binning' in self.params:
+                        self.bin = np.zeros_like(self.H)
+                        self.pgen = np.zeros_like(self.H)
+
                 for i in range(self.params['it_nr']):
 
                         #Only measure Number of Walkers outside of ker(S)
@@ -325,4 +401,6 @@ class Propagator(System):
                         self.E()
                         self.curr_it += 1
 
-
+                if 'binning' in self.params:
+                        np.save(os.path.join(self.params['workdir'],'bin.npy'), self.bin)
+                        np.save(os.path.join(self.params['workdir'],'pgen.npy'), self.pgen)

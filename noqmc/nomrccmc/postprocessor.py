@@ -253,7 +253,8 @@ class Postprocessor(Propagator):
                 
                 self.coeffs = self.coeffs.astype('float64')
 
-                #we need this to compare to the benchmark
+                #we need this to compare to the benchmark -> execute only if benchmark given, 
+                #otherwise just multiply with overlap
                 self.coeffs_det_no0 = np.einsum('ij,kj->ik', self.projector1, self.coeffs)
                 self.coeffs_det_no0 /= np.sqrt(np.einsum('ki,ki->i', self.coeffs_det_no0, self.coeffs_det_no0))
                 self.coeffs_det_no0 = self.coeffs_det_no0.T

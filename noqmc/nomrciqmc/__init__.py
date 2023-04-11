@@ -56,7 +56,7 @@ class NOCIQMC(Propagator):
 
                 if 'scf_sols' not in params:
                         params['scf_sols'] = [1,1,1]
-                params['nr_scf'] = len(params['scf_sols'])
+                params['nr_scf'] = sum(params['scf_sols'])
 
                 self.params = params
                 self.initialize_log()
