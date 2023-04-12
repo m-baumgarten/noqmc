@@ -64,9 +64,9 @@ if __name__ == '__main__':
                 'delay': 1000,
                 'theory_level': 1,
                 'benchmark': 1,
-                'localization': 0,
+                'localization': 1,
                 'scf_sols': [1,1,1],
-                'uniform': 1,
+                'uniform': 0,
                 'binning': 1,
         }
 
