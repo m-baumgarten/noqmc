@@ -29,6 +29,7 @@ from noqmc.nomrccmc.system import (
 )
 from noqmc.nomrccmc.propagator import Propagator
 from noqmc.utils.calc_util import eigh_overcomplete_noci
+from noqmc.utils.glob import THRESHOLDS
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -36,9 +37,6 @@ logger.setLevel(logging.INFO)
 def mute():
     sys.stdout = open(os.devnull, 'w')
 
-
-#TODO implement global thresholds, since they usually differ from revqcmagic
-#thresholds
 
 class Postprocessor(Propagator):
         r"""Class for all sorts of data 
@@ -97,24 +95,6 @@ class Postprocessor(Propagator):
                 self.eigvals, self.eigvecs, projector_mat = eigh_overcomplete_noci(self.H, self.overlap, self.ov_eigval, self.ov_eigvec)
                 self.projector1 = np.einsum('ij,jk->ik', projector_mat, projector_mat.T)
 
-        def good_guess(self) -> np.ndarray:
-                r"""Method for debugging purposes. Generates the lowest
-                eigenvector, such that it may be passed on to a subsequent 
-                NOCI-QMC calculation as an initial guess.
-
-                :returns: The lowest eigen state in determinant basis."""
-
-                ov_eigval, ov_eigvec = la.eigh(self.overlap)
-                indices = (ov_eigval > 1e-10).nonzero()[0]
-                ov_eigval = ov_eigval[indices]
-                projector_mat = ov_eigvec[:, indices]
-                ov_inv = np.diag(1 / ov_eigval)
-                ov_proj_inv = np.einsum(
-                    'ij,jk,lk->il', projector_mat, ov_inv, projector_mat
-                )
-                vec = self.eigvecs[:,0]
-                return np.einsum('ij,j->i', ov_proj_inv, vec)
-
         def gs_degenerate(self) -> Sequence[int]:
                 r"""Returns a sequence of indices, corresponing to the 
                 eigenvectors that span the ground state energy eigen space 
@@ -122,23 +102,22 @@ class Postprocessor(Propagator):
 
                 :returns: Sequence of indices specifying the degenerate ground 
                           state eigen space."""
-                rounded = (
-                    np.round(self.eigvals,int(-np.log10(ZERO_TOLERANCE))-12)
-                )
+                
+                rounded = np.round(self.eigvals, THRESHOLDS.rounding)
+                
                 return (rounded == np.min(rounded)).nonzero()[0]
 
-        def get_subspace(self, eigval: float, loc_th = 5e-06) -> np.ndarray:
+        def get_subspace(self, eigval: float) -> np.ndarray:
                 r"""Get eigenvectors corresponding to certain eigenvalues.
 
                 :param eigval:
-                :param loc_th:
 
                 :returns:
                 """
                 
-                if np.isclose(eigval, 0., atol = loc_th):
+                if np.isclose(eigval, 0., atol=THRESHOLDS.ov_zero_thresh):
                         index = (np.isclose(
-                            self.ov_eigval,eigval, atol = loc_th
+                            self.ov_eigval,eigval, atol=THRESHOLDS.ov_zero_thresh
                         )).nonzero()[0]
                         return self.ov_eigvec[:, index]
                 
@@ -170,7 +149,7 @@ class Postprocessor(Propagator):
                 solve_coeff = np.linalg.solve(proj_overlap, dot_coeff)
                 new = np.einsum('ij,j->i', subspace, solve_coeff) #.T 
                 new /= np.linalg.norm(new, ord = 2)
-                return np.allclose(a = array, b = new, atol = tolerance)
+                return np.allclose(a=array, b=new, atol=tolerance)
 
         def degeneracy_treatment(self) -> None:
                 r"""Determines whether degeneracy of the ground state is present. It then
@@ -195,7 +174,7 @@ class Postprocessor(Propagator):
                 )
                 logger.info(    
                     f'QMC final state in correct subspace? \
-                    {self.is_in_subspace(subspace = subspace, array = self.coeffs[-1,:], tolerance = 1e-02)}'
+                    {self.is_in_subspace(subspace=subspace, array=self.coeffs[-1,:], tolerance=THRESHOLDS.subspace)}'
                 )
                 
                 #Projection onto different eigenstates

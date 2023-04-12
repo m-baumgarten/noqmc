@@ -56,16 +56,17 @@ if __name__ == '__main__':
                 'mode': 'ref',
                 'verbosity': 1,
                 'seed': 69420,
-                'dt': 0.002,
+                'dt': 0.005,
                 'nr_w': 2000,
                 'A': 25, 
                 'c': 0.005,
-                'it_nr': 40000,
-                'delay': 7000,
+                'it_nr': 15000,
+                'delay': 3000,
                 'theory_level': 1,
                 'benchmark': 1,
                 'localization': 0,
-                'scf_sols': [1,1,1]
+                'scf_sols': [1,1,1],
+                'uniform': 1
         }
 
 

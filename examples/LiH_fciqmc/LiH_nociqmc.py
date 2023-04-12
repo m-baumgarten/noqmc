@@ -60,13 +60,13 @@ if __name__ == '__main__':
                 'nr_w': 1000,
                 'A': 12, 
                 'c': 0.04,
-                'it_nr': 8000,
-                'delay': 2000,
+                'it_nr': 4000,
+                'delay': 1000,
                 'theory_level': 1,
                 'benchmark': 1,
-                'localization': 0,
+                'localization': 1,
                 'scf_sols': [1,1,1],
-                'uniform': 1,
+                'uniform': 0,
                 'binning': 1,
         }
 

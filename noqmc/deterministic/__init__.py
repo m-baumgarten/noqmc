@@ -2,7 +2,8 @@ import numpy as np
 
 from noqmc.utils.utilities import (
         Parser,
-        Parameters
+        Parameters,
+        Thresholds
 )
 
 from noqmc.utils.plot import Plot 
@@ -32,10 +33,10 @@ DEFAULT_DETERMINISTIC_ARGS = Parameters(
         nr_scf=2,
 )
 
-THRESHOLDS = {
-        'ov_zero_th':       5e-06,
-        'rounding':         int(-np.log10(ZERO_TOLERANCE))-4,
-}
+THRESHOLDS = Thresholds(
+        ov_zero_thresh=5e-06,
+        rounding=int(-np.log10(ZERO_TOLERANCE))-4,
+)
 
 class Deterministic(Propagator):
         __doc__ = """Executes the deterministic QMC power-method-like propagation.\n""" + Propagator.__doc__
