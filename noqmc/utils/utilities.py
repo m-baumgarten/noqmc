@@ -29,6 +29,7 @@ class Parameters:
         dim: int = None
         nr_scf: int = None
         workdir: str = None
+        baseS: str = None
 
 @dataclass
 class Thresholds:

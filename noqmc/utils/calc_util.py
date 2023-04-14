@@ -176,12 +176,12 @@ def generate_scf(mol, scf_sols, init_guess_rhf=None, init_guess_uhf=None,
 #        return MO_AO_inverse
 
 
-def E_HF(scf_solutions) -> Sequence[float]:
+def E_HF(scf_solutions: Sequence[scf.UHF]) -> Sequence[float]:
         r""""""
         return [hf.e_tot for hf in scf_solutions]
         
 
-def scfarray_to_state(scf_solutions: Sequence) -> Sequence:
+def scfarray_to_state(scf_solutions: Sequence[scf.UHF]) -> Sequence[SingleDeterminant]:
         r""""""
         return [scf_to_state(sol) for sol in scf_solutions]
 

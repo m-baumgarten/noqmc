@@ -59,7 +59,7 @@ class Plot():
 
         def plot_energy(self, ax) -> None:
                 params = self.params
-                x_axis = np.arange(params.it_nr + 1) * params.dt
+                x_axis = np.arange(params.it_nr) * params.dt
 
                 ax.plot(x_axis, self.data['E_proj'], label=r'$E(\tau)$')
                 ax.plot(x_axis, self.data['Ss'], label=r'$S(\tau)$')
@@ -99,7 +99,7 @@ class Plot():
                 
                 ##ADIABATIC
                 if self.eigvals is None: return None
-                print(self.data[key_coeff_ad].shape)                       
+                #print(self.data[key_coeff_ad].shape)                       
                 for i in range(self.data[key_coeff_ad].shape[1]):
                         ax2.plot(x_axis, self.data[key_coeff_ad][:,i], 
                                  color = f'C{i}', 
