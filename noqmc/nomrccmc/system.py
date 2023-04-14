@@ -41,11 +41,6 @@ from noqmc.utils.calc_util import (
 from noqmc.utils.fragmentation import fragment
 from noqmc.utils.utilities import Parameters
 
-####THRESHOLDS#####
-THRESHOLDS = {'ov_zero_th':       5e-06,
-              'rounding':         int(-np.log10(ZERO_TOLERANCE))-4,
-              }
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -96,7 +91,7 @@ class System():
 
                 self.cbs = self.reference[0].configuration.get_subconfiguration("ConvolvedBasisSet")
 
-        def initialize_walkers(self, mode: str = 'noci') -> None:
+        def initialize_walkers(self, mode: str='noci') -> (np.ndarray, np.ndarray):
                 r"""Generates the inital walker population on each reference
                 determinant.
                 
@@ -104,13 +99,13 @@ class System():
                 """
 
                 self.initial = np.zeros(shape=self.params.dim, dtype=int)
-
+                noci_H = np.full(
+                        shape=(self.params.nr_scf, self.params.nr_scf), 
+                        fill_value=np.nan
+                )
+                noci_overlap = np.full_like(noci_H, np.nan)
+                
                 if mode == 'noci':
-                        noci_H = np.zeros(
-                            shape=(self.params.nr_scf, self.params.nr_scf)
-                        )
-                        noci_overlap = np.zeros_like(noci_H)
-                        
                         occs = [ref.occupied_coefficients for ref in self.reference]
                         for i, occ_i in enumerate(occs):
                                 for j, occ_j in enumerate(occs[i:], i):        
@@ -132,12 +127,41 @@ class System():
 
                 elif mode == 'ref':
                         nr = int(self.params.nr_w / self.params.nr_scf)
-                        for i in range(self.params.nr_scf):
+                        E_HFs = E_HF(self.refs_scfobj)
+
+                        for i, E in enumerate(E_HFs):
                                 self.initial[self.refdim * i] = nr
+                                noci_H[i,i] = E
+                                noci_overlap[i,i] = 1.
+                                
                         self.E_NOCI = np.mean(E_HF(self.refs_scfobj))
-                
+
                 logger.info(f'E_NOCI = {self.E_NOCI}')
                 logger.info(f'Initial Guess:  {self.initial}')
+
+                return noci_H, noci_overlap
+
+        def set_Eref(self) -> None:
+                r"""After initilaize walkers"""
+                if self.params.baseS is None:
+                        setattr(self.params, 'baseS', 'hf')
+                        
+                if self.params.baseS.lower() == 'hf':
+                        self.E_ref = self.E_HF
+                elif self.params.baseS.lower() == 'noci':
+                        self.E_ref = self.E_NOCI
+                else:
+                        raise NotImplementedError 
+                
+
+        def update_matrices(self, noci_H, noci_overlap) -> None:
+                r"""After set_Eref"""
+                #Transfer matrix elements to full matrices
+                for i in range(self.params.nr_scf):
+                        for j in range(self.params.nr_scf):
+                                indices = self.refdim*i, self.refdim*j
+                                self.H[indices] = noci_H[i,j] - self.E_ref * noci_overlap[i,j]
+                                self.overlap[indices] = noci_overlap[i,j]
 
         def initialize_sao_hcore(self) -> None:
                 r"""Calculates atomic orbital overlap matrix sao and 1e integrals
@@ -334,7 +358,9 @@ class System():
                 self.initialize_sao_hcore()
                 self.initialize_frag_map()
                 self.get_dimensions()
-                self.initialize_walkers(mode=self.params.mode)
+                noci_H, noci_overlap = self.initialize_walkers(mode=self.params.mode)
+                self.set_Eref()
+                self.update_matrices(noci_H, noci_overlap)
 
 def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet, 
                   enuc: float, sao: np.ndarray, hcore: float, E_ref: float, 

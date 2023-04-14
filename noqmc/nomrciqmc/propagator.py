@@ -53,16 +53,14 @@ class Propagator(System):
                 self.Nws = np.empty(self.params.it_nr, dtype = int)
                 self.n = []
                 self.curr_it = 0
-                self.E_ref = self.E_HF
 
                 self.coeffs = np.zeros([self.params.it_nr+1, self.params.dim], dtype = int)
                 self.coeffs[0,:] = self.initial.copy()
 
-                self.E_proj = np.empty(self.params.it_nr+1)
-                self.E_proj[0] = self.E_NOCI - self.E_ref
-
-                self.Ss = np.empty(self.params.it_nr+1)
-                self.S = self.Ss[0] = 0
+                self.E_proj = np.empty(self.params.it_nr)
+                self.Ss = np.empty(self.params.it_nr)
+                
+                self.S = 0
 
         def E(self) -> None:
                 r"""Calculates energy estimator at current iteration
@@ -78,7 +76,7 @@ class Propagator(System):
                 )[0][0] 
                 E_proj = np.einsum('i,i->', H_tmp[self.index,:], coeffs)
                 E_proj /= np.einsum('i,i->', overlap_tmp[self.index, :], coeffs)
-                self.E_proj[self.curr_it+1] = E_proj
+                self.E_proj[self.curr_it] = E_proj
 
         def Shift(self) -> None:
                 r"""Updates shift every A-th iteration.
@@ -88,6 +86,8 @@ class Propagator(System):
 		"""
                 N_new = self.Nw_ov[self.curr_it]
                 N_old = self.Nw_ov[self.curr_it - self.params.A]
+                #N_new = self.Nws[self.curr_it]
+                #N_old = self.Nws[self.curr_it - self.params.A]
                 self.n.append(N_new/N_old)
                 self.S -= self.params.c / (self.params.A * self.params.dt) * np.log(N_new / N_old)
 
@@ -107,79 +107,27 @@ class Propagator(System):
                 sp_coeffs = np.zeros(self.params.dim, dtype=int)
 
                 for i,coeff in enumerate(self.coeffs[self.curr_it, :]):
-                       
-                        #excited_str, pgens = self.excitation(ex_str=self.index_map_rev[i], size=abs(coeff))
-
-                        sign_coeff = np.sign(coeff)
                         
-                        #Uniform Excitation Generation -> TODO Generalize
-                        js = np.random.randint(0, self.params.dim, size=abs(coeff))
-
-                        #Prepare self.H and self.overlap:
                         key_i = self.index_map_rev[i]
                         det_i = self.generate_det(key_i)
                         occ_i = det_i.occupied_coefficients
+
+                        if self.params.uniform:
+                                js = np.random.randint(0, self.params.dim, size=abs(coeff))
+                                pgens = np.repeat(1/self.params.dim, abs(coeff))
+                        else:   #heat-bath
+                                js, pgens = self.excite_heat_bath(i, abs(coeff))
+
+
+
+                        #FRAGMENT
+                        #excited_str, pgens = self.excitation(ex_str=key_i, size=abs(coeff))
+                        #js = [self.index_map[s] for s in excited_str]
+
+                        #HEAT BATH
+                        #js, pgens = self.excite_heat_bath(i, abs(coeff))
                         
-                        set_js, index, counts = np.unique(
-                            js, return_index=True, return_counts=True
-                        )
-
-                        for j in set_js:
-                                MAT_ELEM_CACHED = not np.isnan(self.H[i,j])
-                                if MAT_ELEM_CACHED:
-                                        continue
-                                det_j = self.get_det(j)
-                                occ_j = det_j.occupied_coefficients
-                                
-                                elem = calc_mat_elem(
-                                    occ_i=occ_i, occ_j=occ_j, 
-                                    cbs=self.cbs, enuc=self.enuc, 
-                                    sao=self.sao, hcore=self.hcore,
-                                    E_ref=self.E_ref
-                                )
-                                self.H[i,j], self.H[j,i] = elem[:2]
-                                self.overlap[i,j], self.overlap[j,i] = elem[2:]
-
-                        spawning_probs = [
-                            self.params.dim * self.params.dt 
-                            * (self.H[i,j] - self.S * self.overlap[i,j])
-                            for j in set_js
-                        ]
-                        rand_vars = np.random.random(size=(len(spawning_probs)))
-                        for j, n, ps, r in zip(set_js,counts,spawning_probs,rand_vars):
-                                ps_s = n * ps
-                                s_int = int(ps_s)
-                                b = ps_s - s_int
-                                s_int += (r < np.abs(b)) * np.sign(b)
-                                sp_coeffs[j] -= sign_coeff * s_int
-                                
-                                if self.params.binning:                               
-                                        self.bin[i, j] -= sign_coeff * s_int
-                                        self.pgen[i,j] = 1/self.params.dim
-                #Annihilation
-                self.coeffs[self.curr_it+1, :] = sp_coeffs
-                self.coeffs[self.curr_it+1, :] += self.coeffs[self.curr_it, :]
-
-                if self.params.verbosity:
-                        print(f'{self.curr_it}. Nw & S:      ',
-                            np.linalg.norm(self.coeffs[self.curr_it+1, :], ord=1), 
-                            self.S 
-                        )
-
-        def pop_dynamics_exc(self) -> None:
-                r""""""
-                sp_coeffs = np.zeros(self.params.dim, dtype=int)
-
-                for i,coeff in enumerate(self.coeffs[self.curr_it, :]):
-                        
-                        excited_str, pgens = self.excitation(ex_str=self.index_map_rev[i], size=abs(coeff))
-                        js = [self.index_map[s] for s in excited_str]
-
                         sign_coeff = np.sign(coeff)
-
-                        key_i = self.index_map_rev[i]
-                        det_i = self.generate_det(key_i)
-                        occ_i = det_i.occupied_coefficients
 
                         set_js, index, counts = np.unique(
                             js, return_index=True, return_counts=True
@@ -223,22 +171,6 @@ class Propagator(System):
                                                 print('pgen & p:', self.pgen[i, j], p)
                                         self.pgen[i, j] = p
                         
-
-                        ##REMOVE THIS TODO
-                      #  for i in range(self.params['dim']):
-                      #  
-                      #          excited_str, pgens = self.excitation(ex_str=self.index_map_rev[i], size=100)
-                      #          js = [self.index_map[s] for s in excited_str]
-                      #          set_js, index, counts = np.unique(
-                      #                  js, return_index=True, return_counts=True
-                      #          )
-                      #          pgens = pgens[index]
-                      #          for j,p in zip(set_js, pgens):
-                      #                  self.pgen[i, j] = p
-                      #          np.save(os.path.join(self.params['workdir'],'pgen.npy'), self.pgen)
-                      #  exit()
-                        #########
-
                 #Annihilation
                 self.coeffs[self.curr_it+1, :] = sp_coeffs
                 self.coeffs[self.curr_it+1, :] += self.coeffs[self.curr_it, :]
@@ -248,7 +180,6 @@ class Propagator(System):
                             np.linalg.norm(self.coeffs[self.curr_it+1, :], ord=1),
                             self.S
                         )
-                pass
 
         def excitation(self, ex_str: Tuple=(1, ((0,),()), ((4,),())), size: int=1): #-> Sequence:
                 r"""
@@ -274,11 +205,14 @@ class Propagator(System):
                 for s in scf_spawn:
                         pgen = 1./self.params.nr_scf
                         
-                        if s == ex_str[0]:
-                                #Let's first try with a uniform sampling scheme:
-                                pgen *= 1./self.refdim
-                                index = s * self.refdim + np.random.randint(self.refdim)
-                                new_str = self.index_map_rev[index]
+                        #HOTFIX TODO
+                        if False:
+                                continue
+                       # if s == ex_str[0]:
+                       #         #Let's first try with a uniform sampling scheme:
+                       #         pgen *= 1./self.refdim
+                       #         index = s * self.refdim + np.random.randint(self.refdim)
+                       #         new_str = self.index_map_rev[index]
               
                         else:
                                 old_ijk = [[(ex_str[0], j, k) for k in spin] for j, spin in enumerate(indices)] 
@@ -305,6 +239,19 @@ class Propagator(System):
                 
                 return out, np.array(p)
 
+        def excite_heat_bath(self, i, size) -> np.ndarray:
+                r""""""
+                if size == 0:
+                        return np.array([]), np.array([])
+
+                overlap_tmp = np.nan_to_num(self.overlap)
+                H_tmp = np.nan_to_num(self.H)
+                prefactor = np.einsum('i->', np.abs(H_tmp[i,:] - self.S * overlap_tmp[i,:]))
+                p_distrib = np.abs(H_tmp[i,:] - self.S * overlap_tmp[i,:]) / prefactor 
+                js = np.random.choice(np.arange(self.params.dim, dtype=int), p=p_distrib, replace=True, size=size)
+                pgen = p_distrib[js] 
+                return js, pgen
+
         def sample_mos(self, scf: int, rule: np.ndarray) -> (list, float, bool):
                 r""""""
                 mo_sspace = []
@@ -319,7 +266,7 @@ class Propagator(System):
                                 
                         (ind, freq), ploc = self.excite_local(ind, freq)
                         pgen *= ploc
-                        #print(ind, freq)
+                        
                         #Ensure necessary amount of electrons is localized on all 
                         #necessary fragments goverened by the determinant we spawn from
                         #print(frags, ind, freq)
@@ -375,31 +322,27 @@ class Propagator(System):
                 r"""Executes the FCIQMC algorithm.
                 """
                 
-                pop_dyn = self.population_dynamics
-                if not self.params.uniform:
-                        assert(self.params.localization)
-                        pop_dyn = self.pop_dynamics_exc
-                        logger.info('Using localized excitation generation scheme!')
-
                 if self.params.binning:
                         self.bin = np.zeros_like(self.H)
                         self.pgen = np.zeros_like(self.H)
 
                 for i in range(self.params.it_nr):
-
                         #Only measure Number of Walkers outside of ker(S)
                         self.Nw()
                         
                         SHIFT_UPDATE = i%self.params.A == 0 and i > self.params.delay
                         if SHIFT_UPDATE: 
                                 self.Shift()
-                        self.Ss[self.curr_it+1] = self.S
-
-                        pop_dyn()
-
+                        self.Ss[i] = self.S
                         self.E()
+
+                        self.population_dynamics()
+                        
                         self.curr_it += 1
+
 
                 if self.params.binning:
                         np.save(os.path.join(self.params.workdir,'bin.npy'), self.bin)
                         np.save(os.path.join(self.params.workdir,'pgen.npy'), self.pgen)
+
+
