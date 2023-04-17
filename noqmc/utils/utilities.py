@@ -23,8 +23,8 @@ class Parameters:
         theory_level: int = None
         benchmark: int = None
         localization: int = None
-        scf_sols: Sequence[int] = None
-        uniform: int = None
+        scf_sols: list = None
+        sampling: str = None
         binning: int = None
         dim: int = None
         nr_scf: int = None
@@ -77,6 +77,10 @@ class Parser():
                 pfield = fields(Parameters)
                 names = [var.name for var in pfield]
                 for line in lines:
+                        for var in pfield:
+                                if var.name != line[0]:
+                                        continue
+                                assert(type(line[1]) is var.type)
                         if line[0] not in names:
                                 logger.warning(f'You are trying to parse an invalid key: {line[0]}')                                
                         setattr(self.parameters, line[0], line[1])
@@ -95,4 +99,4 @@ if __name__ == '__main__':
         parser = Parser()
         filename = sys.argv[1]
         parser.parse(filename)
-        print(parser.parameters.delay)                
+        print(parser.parameters)                

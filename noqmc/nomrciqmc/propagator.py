@@ -8,6 +8,9 @@ by a subset of possible exitations of the reference determinats
 Based on Booth, Thom and Alavi [2009], and Thom and Head-Gordon [2008]
 """
 
+from itertools import combinations
+from noqmc.utils.utilities import Parameters
+
 import logging
 import numpy as np
 from scipy.special import binom
@@ -29,6 +32,7 @@ from noqmc.nomrccmc.system import (
     System,
     calc_mat_elem,
 )
+import noqmc.nomrciqmc.excitation as excite
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -59,8 +63,23 @@ class Propagator(System):
 
                 self.E_proj = np.empty(self.params.it_nr)
                 self.Ss = np.empty(self.params.it_nr)
-                
                 self.S = 0
+
+        def setupgenerator(self):
+                r""""""
+                if self.params.sampling == 'uniform':
+                        self.generator = excite.UniformGenerator(self.params)
+                elif self.params.sampling == 'heatbath':
+                        self.generator = excite.HeatBathGenerator(self)
+                elif self.params.sampling == 'fragment':
+                        self.generator = excite.FragmentGenerator(self.params)
+                else:
+                        raise NotImplementedError
+
+                #if self.params.uniform:
+                #        self.generator = excite.UniformGenerator(self)
+                #else:
+                #        self.generator = excite.HeatBathGenerator(self)
 
         def E(self) -> None:
                 r"""Calculates energy estimator at current iteration
@@ -112,21 +131,20 @@ class Propagator(System):
                         det_i = self.generate_det(key_i)
                         occ_i = det_i.occupied_coefficients
 
-                        if self.params.uniform:
-                                js = np.random.randint(0, self.params.dim, size=abs(coeff))
-                                pgens = np.repeat(1/self.params.dim, abs(coeff))
-                        else:   #heat-bath
-                                js, pgens = self.excite_heat_bath(i, abs(coeff))
+                        #if self.params.uniform:
+                        #        js = np.random.randint(0, self.params.dim, size=abs(coeff))
+                        #        pgens = np.repeat(1/self.params.dim, abs(coeff))
+                        #elif True:
+                        #        js, pgens = self.heatbath_localized(i, abs(coeff))
+                        #else:   #heat-bath
+                        #        js, pgens = self.excite_heat_bath(i, abs(coeff))
 
-
+                        js, pgens = self.generator.excitation(i, abs(coeff))
 
                         #FRAGMENT
                         #excited_str, pgens = self.excitation(ex_str=key_i, size=abs(coeff))
                         #js = [self.index_map[s] for s in excited_str]
 
-                        #HEAT BATH
-                        #js, pgens = self.excite_heat_bath(i, abs(coeff))
-                        
                         sign_coeff = np.sign(coeff)
 
                         set_js, index, counts = np.unique(
@@ -239,18 +257,79 @@ class Propagator(System):
                 
                 return out, np.array(p)
 
-        def excite_heat_bath(self, i, size) -> np.ndarray:
+        def excite_heat_bath(self, i, size) -> (np.ndarray, np.ndarray):
                 r""""""
+                #assert that Hamiltonian and overlap are precomputed
                 if size == 0:
                         return np.array([]), np.array([])
 
                 overlap_tmp = np.nan_to_num(self.overlap)
                 H_tmp = np.nan_to_num(self.H)
+                
+                #write into a new array the corresponding indices of overlap and Hamiltonian matrix elements sampled
+                #we do have index i 
+                #       -> get corresponding ex_str 
+                #               -> get corresponding fragments                
+
                 prefactor = np.einsum('i->', np.abs(H_tmp[i,:] - self.S * overlap_tmp[i,:]))
                 p_distrib = np.abs(H_tmp[i,:] - self.S * overlap_tmp[i,:]) / prefactor 
                 js = np.random.choice(np.arange(self.params.dim, dtype=int), p=p_distrib, replace=True, size=size)
                 pgen = p_distrib[js] 
                 return js, pgen
+
+        def heatbath_localized(self, i, size) -> np.ndarray:
+                r""""""
+                if size == 0:
+                        return np.array([]), np.array([])
+                overlap = np.zeros(self.params.dim)
+                H = np.zeros_like(overlap)
+
+                key = self.index_map_rev[i]
+                det = self.generate_det(key)
+
+                #get indices of occupied MOs
+                indices = np.array([np.arange(n) for n in excited_det.n_electrons], dtype=object)
+                for i, spin in enumerate(indices):
+                        spin[list(key[1][i])] = list(key[2][i])
+ 
+                #retrieve their fragment occupation
+                old_ijk = [[(key[0], j, k) for k in spin] for j, spin in enumerate(indices)] 
+                frags = [[self.fragmap_inv[o] for o in spin] for spin in old_ijk]
+                #this will give a rule on how to generate "connected determinants" from connected MOs
+                # -> (1,3) (2,1) (3,2) (4,2) 
+                sample_rule = [np.unique(spin, return_counts=True) for spin in frags]
+
+                connected_exstr = []
+                for scf in range(self.params.nr_scf):
+                        for s, spin in enumerate(sample_rule):
+                                for (frag_i, n_i) in spin:
+                                        continue
+                                        #mos_on_frag = self.fragmap[]
+                                        
+                                        if len(self.frag_map[scf][s][frag_i]) == n_i -1:
+                                                pass
+                                                #excite
+
+                                        #for all scf sols check whether there are n_i electrons that can be attributed to n_frag fragments
+                                        if not len(self.frag_map[scf][s][frag_i]) >= n_i:
+                                               break #break to next scf
+
+                                        #if n_frag >= n_i generate all possible combinations of 
+                                        #store all in a list of ex_str
+
+
+                                connected_exstr.append()
+
+
+                js = [self.index_map[ex] for ex in connected_exstr]
+                #make array with self.H[i, js]
+                Tij = np.abs(self.H[i,js] - self.S * self.overlap[i,js])
+                pgen = Tij / np.einsum('i->', Tij)
+                
+                sample = np.random.choice(js, p=pgen, replace=True, size=size)
+                ps = pgen[[np.where(s==j)[0][0] for s in sample]]
+
+                return sample, ps
 
         def sample_mos(self, scf: int, rule: np.ndarray) -> (list, float, bool):
                 r""""""
@@ -322,6 +401,8 @@ class Propagator(System):
                 r"""Executes the FCIQMC algorithm.
                 """
                 
+                self.setupgenerator()
+
                 if self.params.binning:
                         self.bin = np.zeros_like(self.H)
                         self.pgen = np.zeros_like(self.H)
@@ -344,5 +425,6 @@ class Propagator(System):
                 if self.params.binning:
                         np.save(os.path.join(self.params.workdir,'bin.npy'), self.bin)
                         np.save(os.path.join(self.params.workdir,'pgen.npy'), self.pgen)
+
 
 

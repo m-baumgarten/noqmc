@@ -36,7 +36,7 @@ if __name__ == '__main__':
                 'benchmark': 1,
                 'localization': 0,
                 'scf_sols': [1,1,0],
-                'uniform': 0,
+                'sampling': 'uniform',
                 'binning': 1,
                 'baseS': 'hf'
         }

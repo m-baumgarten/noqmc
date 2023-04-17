@@ -66,7 +66,7 @@ if __name__ == '__main__':
                 'benchmark': 1,
                 'localization': 0,
                 'scf_sols': [1,1,1],
-                'uniform': 1
+                'sampling': 'uniform'
         }
 
 
