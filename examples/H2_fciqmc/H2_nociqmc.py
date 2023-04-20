@@ -30,7 +30,7 @@ if __name__ == '__main__':
                 'nr_w': 2000,
                 'A': 10, 
                 'c': 0.05,
-                'it_nr': 3000,
+                'it_nr': 5000,
                 'delay': 500,
                 'theory_level': 2,
                 'benchmark': 1,

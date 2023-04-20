@@ -30,13 +30,23 @@ from functools import reduce
 #
 #       Additional: Sample projected energy
 
-class Excitation(NamedTuple):
-        r"""Encodes excitation with respect to a certain SCF solution."""
-        scf: int
-        dex_a: Sequence[int]
-        dex_b: Sequence[int]
-        ex_a: Sequence[int]
-        ex_b: Sequence[int]
+#class Excitation(NamedTuple):
+#        r"""Encodes excitation with respect to a certain SCF solution."""
+#        scf: int
+#        dex_a: Sequence[int]
+#        dex_b: Sequence[int]
+#        ex_a: Sequence[int]
+#        ex_b: Sequence[int]
+
+class Excitation():
+        #reference: SingleDeterminant
+        ex_str: Tuple[int, Tuple[Tuple[int], Tuple[int]], Tuple[Tuple[int], Tuple[int]]]
+
+        def indexrep():
+                pass
+
+        def __add__():
+                pass
 
 class Excitor(): #Again, this class is not necessary as we can store everything in an array of integers 
         r"""Normal ordered walkers comprised of their excitation and their 
