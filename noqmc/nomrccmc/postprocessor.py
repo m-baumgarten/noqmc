@@ -50,43 +50,8 @@ class Postprocessor(Propagator):
                 r"""Solves the generalized eigenproblem. We project out the eigenspace 
                 corresponding to eigenvalue 0 and diagonalize the Hamiltonian with
                 this new positive definite overlap matrix."""
-                isnan = np.isnan(self.H)
-                if any(isnan.flatten()):
-                        #get index of True -> evaluate H and overlap at those indices
-                        
-                        #TODO make sure we only have unique tuples of indices, currently we have double
-                        indices = np.where(isnan)
-                        
-                        pool = multiprocessing.Pool(
-                            processes = multiprocessing.cpu_count(), 
-                            initializer = mute
-                        )
-                        processes = {}
-                        for i,j in zip(indices[0], indices[1]):
-#                                if i > j: continue
-                                det_i = self.get_det(i)
-                                det_j = self.get_det(j)
-                                occ_i = det_i.occupied_coefficients
-                                occ_j = det_j.occupied_coefficients
-
-                                processes[(i,j)] = pool.apply_async(
-                                    calc_mat_elem, 
-                                    [occ_i, occ_j, self.cbs, self.enuc, self.sao, self.hcore, self.E_ref]
-                                )
-
-                        pool.close()
-                        pool.join()
-                        for i,j in zip(indices[0], indices[1]):
-#                                if i > j: continue
-                                processes[(i,j)] = processes[(i,j)].get()
-                                self.H[i,j] = processes[(i,j)][0]
-                                self.H[j,i] = processes[(i,j)][1]
-                                self.overlap[i,j] = processes[(i,j)][2]
-                                self.overlap[j,i] = processes[(i,j)][3]
-
- #                       for key, value in processes.items():
- #                               processes[key] = value.get()
- #                               self.H[i,j], self.H[j,i], self.overlap[i,j], self.overlap[j,i] = processes[key]
+                
+                self._calculatematrices()
 
                 np.save(os.path.join(self.params.workdir, 'overlap.npy'), self.overlap)
                 np.save(os.path.join(self.params.workdir, 'Hamiltonian.npy') , self.H)

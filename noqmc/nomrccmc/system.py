@@ -7,10 +7,11 @@ import logging
 import numpy as np
 import scipy.linalg as la
 from scipy.special import binom
-import os
+import os, sys
 from itertools import combinations
 from typing import Tuple, Sequence
 from copy import deepcopy
+import multiprocessing
 
 ####QCMAGIC IMPORTS
 from qcmagic.core.cspace.basis.basisset import ConvolvedBasisSet
@@ -43,6 +44,9 @@ from noqmc.utils.utilities import Parameters
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+def mute():
+    sys.stdout = open(os.devnull, 'w')
 
 
 class System():
@@ -107,6 +111,8 @@ class System():
                 
                 if mode == 'noci':
                         occs = [ref.occupied_coefficients for ref in self.reference]
+                        
+                        #Compute NOCI Hamiltonian and overlap. Eventually outsource all this to NOCI class
                         for i, occ_i in enumerate(occs):
                                 for j, occ_j in enumerate(occs[i:], i):        
                                         elems = calc_mat_elem(occ_i=occ_i, occ_j=occ_j,
@@ -157,6 +163,10 @@ class System():
         def update_matrices(self, noci_H, noci_overlap) -> None:
                 r"""After set_Eref"""
                 #Transfer matrix elements to full matrices
+                hamiltonian_comp = not any(np.isnan(self.H).flatten())
+                overlap_comp = not any(np.isnan(self.overlap).flatten())
+                if hamiltonian_comp and overlap_comp:
+                        return None
                 for i in range(self.params.nr_scf):
                         for j in range(self.params.nr_scf):
                                 indices = self.refdim*i, self.refdim*j
@@ -175,7 +185,6 @@ class System():
                         np.identity(nspins_per_mat),
                         get_1e_ints(self.cbs, Operator.overlap, compl=compl)
                 )
-
                 self.hcore = np.kron(
                         np.identity(nspins_per_mat),
                         get_1e_ints(self.cbs, Operator.kinetic, compl=compl)
@@ -186,25 +195,40 @@ class System():
                 r""""""
                 fragments = fragment(self.sao)
 
+                #enumerate fragments
                 self.fragments = {i: list(frag) for i, frag in enumerate(fragments)}
+                print(self.fragments)
+
+                #assign each fragment, identified by its number, a set of MOs
                 self.fragmap = [[{i: [] for i in self.fragments} for _ in range(2)] for _ in range(self.params.nr_scf)]
                 self.fragmap_inv = {}
 
                 for i, scf in enumerate(self.reference):
                         for j, coeff_spin in enumerate(scf.coefficients):
+                                print(f'Ref {i}, spin {j}:        ', coeff_spin)
                                 for k, mo in enumerate(coeff_spin.T):
+                                        #Each MO will be assigned to a fragment
+
                                         partial_mulliken = [np.sum(mo[frag]**2) for _, frag in self.fragments.items()]
                                         frag_index = np.where(np.max(partial_mulliken) == partial_mulliken)[0][0]
                                         
                                         self.fragmap[i][j][frag_index].append(k)
+                                        
+                                        #create map between each MO, identified by SCF number, spin space & MO index and fragments
                                         self.fragmap_inv[(i,j,k)] = frag_index
-                
+                                        if (i,j,k) == (0,1,4) or (i,j,k) == (1,1,4):
+                                                print('Mulliken:        ', partial_mulliken)
+                                                print('Max:             ', frag_index)
+
                                 #Remove empty fragments:
                                 for frag in list(self.fragmap[i][j].keys()):
                                         #print(self.fragmap[i][j])
                                         if self.fragmap[i][j][frag] == []:
                                                 del self.fragmap[i][j][frag]
-
+                print(self.fragments)
+                print(self.fragmap)
+                print('INVERSE: ', self.fragmap_inv)
+        
         def generate_det(self, ex_str: str) -> SingleDeterminant:
                 r"""Generates Determinant at index i. Here, we only 
                 implemented singly excited determinants so far.
@@ -266,23 +290,25 @@ class System():
                 self.params.dim = int(np.sum(self.HilbertSpaceDim))
                 self.refdim = self.params.dim // self.params.nr_scf
 
-                borders = [i*self.refdim for i in range(self.params.nr_scf+1)]
+                borders = np.arange(self.params.nr_scf+1, dtype=int) * self.refdim
+                #borders = [i*self.refdim for i in range(self.params.nr_scf+1)]
                 self.scf_spaces = [range(borders[i], borders[i+1]) 
                                    for i in range(self.params.nr_scf)]
 
                 self.ref_indices = borders[:-1]
                 
-                if 'Hamiltonian.npy' in os.listdir():
+                if 'Hamiltonian.npy' in os.listdir() and 'overlap.npy' in os.listdir():
                         self.H = np.load('Hamiltonian.npy')
                         self.overlap = np.load('overlap.npy')
+                        
                 else:
                         self.H = np.full((self.params.dim, self.params.dim), np.nan)
-                        print('DIM:     ', self.params.dim)
                         self.overlap = np.full((self.params.dim, self.params.dim), np.nan)
         
                 self.H_dict = {}
 
                 logger.info(f'Hilbert space dimensions: {self.HilbertSpaceDim}')
+                logger.info(f'Total Dimension:          {self.params.dim}')
 
         def excite(self, sd: SingleDeterminant, 
                    ex: Tuple[Sequence[int],Sequence[int]] , 
@@ -362,6 +388,44 @@ class System():
                 self.set_Eref()
                 self.update_matrices(noci_H, noci_overlap)
 
+        def _calculatematrices(self) -> None:
+                r"""Solves the generalized eigenproblem. We project out the eigenspace 
+                corresponding to eigenvalue 0 and diagonalize the Hamiltonian with
+                this new positive definite overlap matrix."""
+                isnan = np.isnan(self.H)
+                if any(isnan.flatten()):
+                        indices = np.where(isnan)
+                        
+                        pool = multiprocessing.Pool(
+                            processes = multiprocessing.cpu_count(), 
+                            initializer = mute
+                        )
+                        processes = {}
+                        for i,j in zip(indices[0], indices[1]):
+#                                if i > j: continue
+                                det_i = self.get_det(i)
+                                det_j = self.get_det(j)
+                                occ_i = det_i.occupied_coefficients
+                                occ_j = det_j.occupied_coefficients
+
+                                processes[(i,j)] = pool.apply_async(
+                                    calc_mat_elem, 
+                                    [occ_i, occ_j, self.cbs, self.enuc, self.sao, self.hcore, self.E_ref]
+                                )
+
+                        pool.close()
+                        pool.join()
+                        for i,j in zip(indices[0], indices[1]):
+#                                if i > j: continue
+                                processes[(i,j)] = processes[(i,j)].get()
+                                self.H[i,j] = processes[(i,j)][0]
+                                self.H[j,i] = processes[(i,j)][1]
+                                self.overlap[i,j] = processes[(i,j)][2]
+                                self.overlap[j,i] = processes[(i,j)][3]
+
+       
+
+
 def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet, 
                   enuc: float, sao: np.ndarray, hcore: float, E_ref: float, 
                   ) -> Sequence[np.ndarray]:
@@ -379,6 +443,8 @@ def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet,
         H_ji -= E_ref * overlap_ji
 
         return [H_ij, H_ji, overlap_ij, overlap_ji]
+
+
 
 
 if __name__ == '__main__':
