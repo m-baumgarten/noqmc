@@ -30,7 +30,7 @@ from noqmc.utils.utilities import setup_workdir
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-def init_guess_mixed(mol,rhf,uhf,mixing_parameter=np.pi/4):
+def init_guess_mixed(mol, rhf, mixing_parameter=np.pi/4):
         ''' Generate density matrix with broken spatial and spin symmetry by mixing
         HOMO and LUMO orbitals following ansatz in Szabo and Ostlund, Sec 3.8.7.
     
@@ -73,17 +73,16 @@ def init_guess_mixed(mol,rhf,uhf,mixing_parameter=np.pi/4):
                         Ca[:,k] = np.cos(q)*psi_homo + np.sin(q)*psi_lumo
                         Cb[:,k] = np.cos(q)*psi_homo - np.sin(q)*psi_lumo
                         continue
-                if k==lumo_idx:
+                if k == lumo_idx:
                         Ca[:,k] = -np.sin(q)*psi_homo + np.cos(q)*psi_lumo
                         Cb[:,k] =  np.sin(q)*psi_homo + np.cos(q)*psi_lumo
                         continue
                 Ca[:,k]=mo_coeff[:,k]
                 Cb[:,k]=mo_coeff[:,k]
 
-        dm =scf.UHF(mol).make_rdm1( (Ca,Cb), (mo_occ,mo_occ) )
+        dm = scf.UHF(mol).make_rdm1((Ca,Cb), (mo_occ,mo_occ))
         return dm 
 
-#write generate_rhf, generate_uhf, and switch_uhf 
 
 def generate_scf(mol, scf_sols, init_guess_rhf=None, init_guess_uhf=None, 
                  workdir='output', localization=True) -> Sequence:
@@ -99,15 +98,18 @@ def generate_scf(mol, scf_sols, init_guess_rhf=None, init_guess_uhf=None,
                 else:
                         erhf = rhf.kernel(init_guess_rhf)
                 from_scf(rhf, os.path.join(workdir, f'rhf_{sol}.molden'))
+                
                 rhf = scf.addons.convert_to_uhf(rhf)
                 rhf.mo_coeff = np.array(rhf.mo_coeff)
+                
                 scf_solutions.append(rhf)                
 
         #Generate UHF solutions
         for sol in range(scf_sols[1] + scf_sols[2]):
                 uhf = scf.UHF(mol)
                 if init_guess_uhf is None:
-                        euhf = uhf.kernel(init_guess_mixed(mol, rhf, uhf))
+                        euhf = uhf.kernel()
+                        #euhf = uhf.kernel(init_guess_mixed(mol, uhf))
                 else:
                         euhf = uhf.kernel(init_guess_uhf)
                 
@@ -122,58 +124,12 @@ def generate_scf(mol, scf_sols, init_guess_rhf=None, init_guess_uhf=None,
                         localize(sol)
                         #a = sol.mulliken_pop()
                         #print('Mulliken Charges:        ', a)
-        
+
         rhf = scf.RHF(mol)
         erhf = rhf.kernel()
         dump_fci_ccsd(rhf, workdir=workdir)
 
         return scf_solutions
-
-#def get_MO_AO(scf_solutions: Sequence) -> dict:
-#        r"""scf_solutions here is an array of SingleDeterminant objects."""
-#        MO_AO_MAP = []
-#        dim = len(np.array(scf_solutions[0].coefficients).T)
-#        for i_sol, sol in enumerate(scf_solutions):
-#                MO_AO_SCF = {}
-#                for i_spinspace, spinspace in enumerate(sol.coefficients):
-#                        spinspace = np.array(spinspace.copy())
-#
-#                        localized = [np.where(np.abs(mo) == np.max(np.abs(mo)))[0][0]
-#                                     for i_mo, mo in enumerate(spinspace.T)]
-#                        #signs = [int(np.sign(mo[ind])) for ind, mo in zip(localized, spinspace.T)]
-#
-#                        #MO_AO_MAP.update(
-#                        #        {2*dim*i_sol + dim*i_spinspace + i_mo: sign*loc
-#                        #         for i_mo, (sign, loc) in enumerate(zip(signs, localized))}
-#                        #)
-#                        MO_AO_SCF.update(
-#                                {dim*i_sol + i_mo: loc
-#                                 for i_mo, loc in enumerate(localized)}
-#                        )
-#                MO_AO_MAP.append(MO_AO_SCF)
-        #print(MO_AO_MAP)
-        #exit()
-#        logger.info(f'MO to AO map:\n{MO_AO_MAP}')
-#        return MO_AO_MAP
-
-#def invert_MO_AO(MO_AO_map: dict, dim: int, nr_scf: int) -> dict:
-#        r""""""
-#        print(MO_AO_map)
-##     #   MO_AO_inverse = [{i: [key for key,val in MO_AO_map.items() if val==i and int(key/dim)==m] for i in range(dim*2)} for m in range(nr_scf)]
-#        MO_AO_inverse = None
-
-        #for key,val in MO_AO_map.items():
-        #        print(key)
-        #exit()
-#        MO_AO_inverse = []
-#        for m in range(nr_scf):
-#                tmp = {}
-#                for i in range(dim):
-#        #                print()
-#                        tmp[i] = [key for key,val in MO_AO_map.items() if val==i] # and int(key/dim)==m]
-#                MO_AO_inverse.append(tmp)
-
-#        return MO_AO_inverse
 
 
 def E_HF(scf_solutions: Sequence[scf.UHF]) -> Sequence[float]:
@@ -197,7 +153,7 @@ def localize(mf) -> np.ndarray:
         occ, virt = [], []
         
         for occ_spinspace in mf.mo_occ:
-                
+
                 occ_tmp, virt_tmp = [], []
                 
                 for j,o in enumerate(occ_spinspace):
@@ -206,12 +162,14 @@ def localize(mf) -> np.ndarray:
                 
                 occ.append(occ_tmp)
                 virt.append(virt_tmp)
-        
+
         #Perform localization
         for i, (o, v) in enumerate(zip(occ, virt)):        
                 c_i = mf.mo_coeff[i, :, :]
+                #print('Before:  ', i, c_i)
                 c_i[:, o] = Boys(mf.mol, c_i[:, o]).kernel() #verbose=4)
                 c_i[:, v] = Boys(mf.mol, c_i[:, v]).kernel() #verbose=4)
+                #print('After:   ', i, c_i)
 
         logger.info('localization done')
 

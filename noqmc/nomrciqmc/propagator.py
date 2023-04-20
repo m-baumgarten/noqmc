@@ -7,13 +7,8 @@ by a subset of possible exitations of the reference determinats
 (generally obtained from SCF metadynamics)
 Based on Booth, Thom and Alavi [2009], and Thom and Head-Gordon [2008]
 """
-
-from itertools import combinations
-from noqmc.utils.utilities import Parameters
-
 import logging
 import numpy as np
-from scipy.special import binom
 import os
 from typing import (
     Tuple, 
@@ -67,19 +62,21 @@ class Propagator(System):
 
         def setupgenerator(self):
                 r""""""
-                if self.params.sampling == 'uniform':
+                sample = self.params.sampling
+                #print(np.where(np.isnan(self.H)))
+                #exit()
+                if sample == 'uniform':
                         self.generator = excite.UniformGenerator(self.params)
-                elif self.params.sampling == 'heatbath':
+                elif sample == 'heatbath':
                         self.generator = excite.HeatBathGenerator(self)
-                elif self.params.sampling == 'fragment':
-                        self.generator = excite.FragmentGenerator(self.params)
+                elif sample == 'fragment':
+                        self.generator = excite.FragmentGenerator(self)
+                elif sample == 'localheatbath':
+                        self.generator = excite.LocalHeatBathGenerator(self)
+                elif sample == 'fragmentheatbath':
+                        self.generator = excite.HeatBathFragmentGenerator(self)
                 else:
                         raise NotImplementedError
-
-                #if self.params.uniform:
-                #        self.generator = excite.UniformGenerator(self)
-                #else:
-                #        self.generator = excite.HeatBathGenerator(self)
 
         def E(self) -> None:
                 r"""Calculates energy estimator at current iteration
@@ -105,8 +102,8 @@ class Propagator(System):
 		"""
                 N_new = self.Nw_ov[self.curr_it]
                 N_old = self.Nw_ov[self.curr_it - self.params.A]
-                #N_new = self.Nws[self.curr_it]
-                #N_old = self.Nws[self.curr_it - self.params.A]
+            #    N_new = self.Nws[self.curr_it]
+            #    N_old = self.Nws[self.curr_it - self.params.A]
                 self.n.append(N_new/N_old)
                 self.S -= self.params.c / (self.params.A * self.params.dt) * np.log(N_new / N_old)
 
@@ -131,19 +128,7 @@ class Propagator(System):
                         det_i = self.generate_det(key_i)
                         occ_i = det_i.occupied_coefficients
 
-                        #if self.params.uniform:
-                        #        js = np.random.randint(0, self.params.dim, size=abs(coeff))
-                        #        pgens = np.repeat(1/self.params.dim, abs(coeff))
-                        #elif True:
-                        #        js, pgens = self.heatbath_localized(i, abs(coeff))
-                        #else:   #heat-bath
-                        #        js, pgens = self.excite_heat_bath(i, abs(coeff))
-
                         js, pgens = self.generator.excitation(i, abs(coeff))
-
-                        #FRAGMENT
-                        #excited_str, pgens = self.excitation(ex_str=key_i, size=abs(coeff))
-                        #js = [self.index_map[s] for s in excited_str]
 
                         sign_coeff = np.sign(coeff)
 
@@ -185,8 +170,6 @@ class Propagator(System):
                                         
                         if self.params.binning:
                                 for j,p in zip(set_js, pgens):
-                                        if self.pgen[i, j] != p and self.pgen[i, j] != 0:
-                                                print('pgen & p:', self.pgen[i, j], p)
                                         self.pgen[i, j] = p
                         
                 #Annihilation
@@ -198,84 +181,6 @@ class Propagator(System):
                             np.linalg.norm(self.coeffs[self.curr_it+1, :], ord=1),
                             self.S
                         )
-
-        def excitation(self, ex_str: Tuple=(1, ((0,),()), ((4,),())), size: int=1): #-> Sequence:
-                r"""
-                :params det: Determinant we want to excite from
-                :params nr:  Number of excitations we wish to generate
-                
-                :returns: array of keys and array of generation probabilities"""
-                #Potentially exchange this with SCF transition matrix 
-                if size==0:
-                        return [], np.array([])
-
-                scf_spawn = np.random.randint(0, self.params.nr_scf, size=size)
-                # 1. Prepare MO list for ex_str:
-                excited_det = self.generate_det(ex_str)
-                # indices will contain the MO indices corresponding to an ex_str, 
-                # conserving the spin structure of the ex_str
-                indices = np.array([np.arange(n) for n in excited_det.n_electrons], dtype=object)
-                for i, spin in enumerate(indices):
-                        spin[list(ex_str[1][i])] = list(ex_str[2][i])
-                
-                out = []
-                p = []
-                for s in scf_spawn:
-                        pgen = 1./self.params.nr_scf
-                        
-                        #HOTFIX TODO
-                        if False:
-                                continue
-                       # if s == ex_str[0]:
-                       #         #Let's first try with a uniform sampling scheme:
-                       #         pgen *= 1./self.refdim
-                       #         index = s * self.refdim + np.random.randint(self.refdim)
-                       #         new_str = self.index_map_rev[index]
-              
-                        else:
-                                old_ijk = [[(ex_str[0], j, k) for k in spin] for j, spin in enumerate(indices)] 
-                                frags = [[self.fragmap_inv[o] for o in spin] for spin in old_ijk]
-                                sample_rule = [np.unique(spin, return_counts=True) for spin in frags]
-
-                                # 2. sample MOs according to sample_rule and produce correct pgen
-                                mo_sspace, pgen_mo, localized_on_frag = self.sample_mos(scf=s, rule=sample_rule)
-                               
-                                if not localized_on_frag:
-                                        continue
-
-                                pgen *= pgen_mo
-                                dexcits, excits, allowed = self.collapse(mo_sspace, excited_det.n_electrons)
-                                #print(dexcits, excits, allowed)
-
-                                if not allowed: 
-                                        continue
-                                
-                                new_str = (s, dexcits, excits)
-                        
-                        out.append(new_str)
-                        p.append(pgen)
-                
-                return out, np.array(p)
-
-        def excite_heat_bath(self, i, size) -> (np.ndarray, np.ndarray):
-                r""""""
-                #assert that Hamiltonian and overlap are precomputed
-                if size == 0:
-                        return np.array([]), np.array([])
-
-                overlap_tmp = np.nan_to_num(self.overlap)
-                H_tmp = np.nan_to_num(self.H)
-                
-                #write into a new array the corresponding indices of overlap and Hamiltonian matrix elements sampled
-                #we do have index i 
-                #       -> get corresponding ex_str 
-                #               -> get corresponding fragments                
-
-                prefactor = np.einsum('i->', np.abs(H_tmp[i,:] - self.S * overlap_tmp[i,:]))
-                p_distrib = np.abs(H_tmp[i,:] - self.S * overlap_tmp[i,:]) / prefactor 
-                js = np.random.choice(np.arange(self.params.dim, dtype=int), p=p_distrib, replace=True, size=size)
-                pgen = p_distrib[js] 
-                return js, pgen
 
         def heatbath_localized(self, i, size) -> np.ndarray:
                 r""""""
@@ -330,72 +235,6 @@ class Propagator(System):
                 ps = pgen[[np.where(s==j)[0][0] for s in sample]]
 
                 return sample, ps
-
-        def sample_mos(self, scf: int, rule: np.ndarray) -> (list, float, bool):
-                r""""""
-                mo_sspace = []
-                localized_on_frag = True
-                pgen = 1.
-
-                for i_s, spin in enumerate(rule):
-                        
-                        mo = []
-                        ind, freq = spin
-                        frags = self.fragmap[scf][i_s]                                       
-                                
-                        (ind, freq), ploc = self.excite_local(ind, freq)
-                        pgen *= ploc
-                        
-                        #Ensure necessary amount of electrons is localized on all 
-                        #necessary fragments goverened by the determinant we spawn from
-                        #print(frags, ind, freq)
-                        for j,i in enumerate(ind):
-                                if i not in frags:
-                                        return [], 0.0, False
-                                if len(frags[i]) < freq[j]:
-                                        return [], 0.0, False
-
-                        for i, n in zip(ind, freq):
-                                mo.append(np.random.choice(frags[i], size=n, replace=False))
-                                pgen *= 1/binom(len(frags[i]), n)
-                        
-                        mo = np.concatenate(mo)
-                        mo_sspace.append(mo)
- 
-                return mo_sspace, pgen, True
-
-        def excite_local(self, ind: np.ndarray, freq:np.ndarray) -> Tuple[Tuple[np.ndarray, np.ndarray], float]:
-                r"""Decides whether to excited one electron to a nearest neighbor fragment
-                and returns the resulting new fragment configuration with corresponding
-                frequencies."""
-                dont_excite = np.round(np.random.random())   #create binary number
-                
-                if dont_excite:
-                        return (ind, freq), 0.5
-                
-                localized = np.repeat(ind, freq)
-                l = len(localized)
-                ploc = 1/l
-                excited = np.random.choice(range(l))  #is sum(freq) faster?                              
-                localized[excited] += 1 - 2 * int(np.round(np.random.random()))
-                
-                return np.unique(localized, return_counts=True), 0.5*ploc
-
-        def collapse(self, indices: list, n_e: list) -> (list, bool):
-                r"""Evaluates whether a set of MO indices is within the Hilbert space
-                defined by the maximum allows excitation level."""
-                dex = [[],[]]
-                ex = [[],[]]
-                for j, (ind, n) in enumerate(zip(indices, n_e)):
-                        dex[j] = tuple(set(range(n)).difference(ind))
-                        for m, i in enumerate(ind):
-                                if i >= n:
-                                        ex[j].append(i)
-                for spin in ex:
-                        spin.sort()
-                ex = [tuple(spin) for spin in ex]
-                level = sum([len(s) for s in ex]) 
-                return tuple(dex), tuple(ex), level <= self.params.theory_level
 
         def run(self) -> None:
                 r"""Executes the FCIQMC algorithm.
