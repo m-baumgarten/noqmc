@@ -91,33 +91,57 @@ def generate_scf(mol, scf_sols, init_guess_rhf=None, init_guess_uhf=None,
         scf_solutions = []
 
         #Generate RHF solutions
-        for sol in range(scf_sols[0]):
+        if scf_sols[0] > 0:
                 rhf = scf.RHF(mol)
                 if init_guess_rhf is None:
                         erhf = rhf.kernel()
                 else:
                         erhf = rhf.kernel(init_guess_rhf)
-                from_scf(rhf, os.path.join(workdir, f'rhf_{sol}.molden'))
-                
+                from_scf(rhf, os.path.join(workdir, f'rhf.molden'))
                 rhf = scf.addons.convert_to_uhf(rhf)
                 rhf.mo_coeff = np.array(rhf.mo_coeff)
                 
-                scf_solutions.append(rhf)                
+#                for spin in rhf.mo_coeff:
+#                        spin /= np.sqrt(np.einsum('ki,ki->i', spin, spin))
+                
+                scf_solutions.append(rhf)
+                scf_solutions = [rhf] * scf_sols[0]
+
 
         #Generate UHF solutions
-        for sol in range(scf_sols[1] + scf_sols[2]):
+        if scf_sols[1] > 0:
                 uhf = scf.UHF(mol)
                 if init_guess_uhf is None:
                         euhf = uhf.kernel()
-                        #euhf = uhf.kernel(init_guess_mixed(mol, uhf))
                 else:
                         euhf = uhf.kernel(init_guess_uhf)
-                
-                if sol >= scf_sols[1]:
-                        uhf.mo_coeff[1], uhf.mo_coeff[0] = uhf.mo_coeff[0].copy(), uhf.mo_coeff[1].copy()
+                from_scf(uhf, os.path.join(workdir, f'uhf.molden'))
+                scf_solutions += [uhf] * scf_sols[1]
 
-                from_scf(uhf, os.path.join(workdir, f'uhf_{sol}.molden'))
-                scf_solutions.append(uhf)
+        if scf_sols[2] > 0:
+                uhf2 = scf.UHF(mol)
+                if init_guess_uhf is None:
+                        euhf = uhf2.kernel()
+                else:
+                        euhf = uhf2.kernel(init_guess_uhf)
+                if scf_sols[1] > 0:
+                        uhf2.mo_coeff[1], uhf2.mo_coeff[0] = uhf.mo_coeff[0].copy(), uhf.mo_coeff[1].copy()
+                from_scf(uhf2, os.path.join(workdir, f'uhf2.molden'))
+                scf_solutions += [uhf2] * scf_sols[2]
+
+#        for sol in range(scf_sols[1] + scf_sols[2]):
+#                uhf = scf.UHF(mol)
+#                if init_guess_uhf is None:
+#                        euhf = uhf.kernel()
+#                        #euhf = uhf.kernel(init_guess_mixed(mol, uhf))
+#                else:
+#                        euhf = uhf.kernel(init_guess_uhf)
+#                
+#                if sol >= scf_sols[1]:
+#                        uhf.mo_coeff[1], uhf.mo_coeff[0] = uhf.mo_coeff[0].copy(), uhf.mo_coeff[1].copy()
+#
+#                from_scf(uhf, os.path.join(workdir, f'uhf_{sol}.molden'))
+#                scf_solutions.append(uhf)
 
         if localization:
                 for sol in scf_solutions:
@@ -176,7 +200,7 @@ def localize(mf) -> np.ndarray:
         return mf.mo_coeff
 
 def eigh_overcomplete_noci(H, overlap, ov_eigval, ov_eigvec, loc_th=5e-06
-        ) -> Tuple[np.ndarray, np.ndarray]:
+        ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         r""""""
         indices = (ov_eigval > loc_th).nonzero()[0]
 
