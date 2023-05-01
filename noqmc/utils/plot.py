@@ -29,6 +29,7 @@ class Plot():
                 self.cols = 3
                 self.eigvals = None
                 self.max_lines = 5
+                self.level = ['S', 'SD', 'SDT']
 
         def add_data(self, postpr: Postprocessor) -> dict:
                 r"""Reads in data from a Postprocessor, which contains information
@@ -62,12 +63,13 @@ class Plot():
                 x_axis = np.arange(params.it_nr) * params.dt
 
                 ax.plot(x_axis, self.data['E_proj'], label=r'$E(\tau)$')
-                ax.plot(x_axis, self.data['Ss'], label=r'$S(\tau)$')
+                if 'Ss' in self.data:
+                        ax.plot(x_axis, self.data['Ss'], label=r'$S(\tau)$')
                 
                 if self.eigvals is not None:
                         e_corr = np.min(self.eigvals)
                         ax.hlines(e_corr, x_axis[-1], 0, color='black', 
-                                linestyle = 'dashed', label=r'$E_{NOCI-SD..}$'
+                                linestyle = 'dashed', label=r'$E_{NOCI-%s}$' %self.level[self.params.theory_level-1]
                         )
         
                 ax.set_ylabel(r'$E / \mathrm{a.u.}$')
@@ -75,7 +77,8 @@ class Plot():
                 ax.legend(frameon=False)
 
                 np.save(self.wd('E_proj.npy'), self.data['E_proj'])
-                np.save(self.wd('Ss.npy'), self.data['Ss'])
+                if 'Ss' in self.data:
+                        np.save(self.wd('Ss.npy'), self.data['Ss'])
 
         def plot_coeffs(self, ax1, ax2) -> None:
                 key_coeff = 'coeffs_det_no0'
