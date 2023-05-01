@@ -1,82 +1,49 @@
+import logging
+import os
 import numpy as np
 
 from noqmc.utils.utilities import (
         Parser,
         Parameters,
-        Thresholds
 )
 
 from noqmc.utils.plot import Plot 
-
+from noqmc.utils.glob import DEFAULT_DETERMINISTIC_ARGS
+from noqmc.nomrccmc import NOCCMC
 from noqmc.nomrccmc.system import System
 from noqmc.deterministic.propagator import Propagator
 from noqmc.nomrccmc.postprocessor import Postprocessor
-from noqmc.nomrccmc.statistics import Statistics
 
 from pyscf.gto import Mole
-from pyscf import gto
-from qcmagic.auxiliary.qcmagic_standards import ZERO_TOLERANCE
 
-DEFAULT_DETERMINISTIC_ARGS = Parameters(
-        mode='ref',
-        verbosity=1,
-        seed=69420,
-        dt=0.1,
-        nr_w=3000,
-        A=10,
-        c=0.01,
-        it_nr=21,
-        delay=20,
-        theory_level=2,
-        benchmark=1,
-        localization=0,
-        nr_scf=2,
-)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-THRESHOLDS = Thresholds(
-        ov_zero_thresh=5e-06,
-        rounding=int(-np.log10(ZERO_TOLERANCE))-4,
-)
+class Deterministic(NOCCMC):
+        r""""""
+        def __init__(self, mol: Mole, params: Parameters=None):
+                if params is None:
+                        params = DEFAULT_DETERMINISTIC_ARGS
+                super().__init__(mol, params)
+        
 
-class Deterministic(Propagator):
-        __doc__ = """Executes the deterministic QMC power-method-like propagation.\n""" + Propagator.__doc__
-        def __init__(self, mol: Mole, params = None):
-                if params is not None:
-                        if isinstance(params, Parameters):
-                                params = params
-                        
-                        elif isinstance(params, dict):
-                                params_new = Parameters()
-                                for key, val in params.items():
-                                        setattr(params_new, key, val)
-                                params = params_new
+        def initialize_log(self) -> None:
+                r""""""
+                filename = os.path.join(self.params.workdir, 
+                                        f'deterministic_{os.getpid()}.log')
+                logging.basicConfig(
+                        filename=filename, #format='%(levelname)s: %(message)s', 
+                ) #level=logging.INFO
 
-                        elif isinstance(params, str):
-                                params = Parser().parse(params)
-
-                else: params = DEFAULT_DETERMINISTIC_ARGS 
- 
-                self.params = params
-                self.mol = mol
-                self.system = System(mol=mol, params=params)
-                self.initialized = False
-
-                
+               
         def run(self) -> Propagator:
-                if not self.initialized: self.initialize_references() 
+                if not self.initialized: 
+                        self.system.initialize() 
+                
                 self.prop = Propagator(self.system)
                 self.prop.run()
                 self.__dict__.update(self.prop.__dict__)
                 return self.prop
-
-        def initialize_references(self, guess_rhf: np.ndarray = None, 
-                                  guess_uhf: np.ndarray = None) -> None:
-                r""""""
-                self.system.get_reference(
-                    guess_rhf=guess_rhf, guess_uhf=guess_uhf
-                )
-                self.system.initialize()
-                self.initialized = True
 
         def get_data(self) -> None:
                 r"""After running the population dynamics, get_data() will be
@@ -85,12 +52,8 @@ class Deterministic(Propagator):
                 self.postpr = Postprocessor(self.prop)
                 self.postpr.postprocessing(benchmark = self.params.benchmark)
                                 
-                #self.stat = Statistics(self.prop.Ss, self.params)
-                #self.stat.analyse() 
-                #self.postpr.data_summary = self.stat.data_summary
-
         def plot(self) -> None:
-
+                import matplotlib.pyplot as plt
                 plot = Plot()
                 data = plot.add_data(self.postpr)
                 plot.setup_figure(data)
@@ -98,7 +61,7 @@ class Deterministic(Propagator):
                 
                 plot.plot_energy(plot.ax[0,1])
                 plot.plot_coeffs(plot.ax[0,0], plot.ax[1,0])
-                plot.plot_walkers(plot.ax[0,2])
+                #plot.plot_walkers(plot.ax[0,2])
                 #self.plot_stderr(plot.ax[1,1])
                 plot.plot_nullspace(plot.ax[1,2])
                 plt.savefig('summary.png')
@@ -108,22 +71,25 @@ class Deterministic(Propagator):
 
 
 if __name__ == '__main__':
-        mol = gto.M(atom=[['H', 0, 0, 0], ['H', 0, 0, 1.8]], 
-                    basis='sto-3g', unit='Bohr')
+        from pyscf import gto
+#        mol = gto.M(atom=[['H', 0, 0, 0], ['H', 0, 0, 1.8]], 
+#                    basis='sto-3g', unit='Bohr')
+
+        
 
         basis = '6-31g*'
         mol = gto.M(
                 atom=[["He", 0., 0., 0.],
                       ["He", 0., 0., 2.5 ],
-                      ["He", 0., 0., 5.],
-                      ["He", 0., 0., 7.5]],
+                      ["He", 0., 0., 5.]],
                 basis=basis, verbose=0,
                 unit='Angstrom'
         )
 
 
-        my_nociqmc = Deterministic(mol)
-        my_nociqmc.run()
-        my_nociqmc.get_data()
-        my_nociqmc.plot()
+        my_det = Deterministic(mol)
+        my_det.initialize_references()
+        my_det.run()
+        my_det.get_data()
+        my_det.plot()
         
