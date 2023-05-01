@@ -10,8 +10,6 @@ from noqmc.nomrccmc import NOCCMC
 from noqmc.nomrciqmc.propagator import Propagator
 from noqmc.utils.glob import DEFAULT_CIQMC_ARGS
 
-from qcmagic.auxiliary.qcmagic_standards import ZERO_TOLERANCE
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 

@@ -55,10 +55,11 @@ class Propagator(System):
 
                 self.coeffs = np.zeros([self.params.it_nr+1, self.params.dim], dtype = int)
                 self.coeffs[0,:] = self.initial.copy()
+                print('coeff:   ', self.coeffs[0,:])
 
                 self.E_proj = np.empty(self.params.it_nr)
                 self.Ss = np.empty(self.params.it_nr)
-                self.S = 0
+                self.S = 0.
 
         def setupgenerator(self):
                 r""""""
@@ -100,10 +101,10 @@ class Propagator(System):
                 :param A: Interval of reevaluation of S
 		:param c: Empirical daming parameter c
 		"""
-                N_new = self.Nw_ov[self.curr_it]
-                N_old = self.Nw_ov[self.curr_it - self.params.A]
-            #    N_new = self.Nws[self.curr_it]
-            #    N_old = self.Nws[self.curr_it - self.params.A]
+#                N_new = self.Nw_ov[self.curr_it]
+#                N_old = self.Nw_ov[self.curr_it - self.params.A]
+                N_new = self.Nws[self.curr_it]
+                N_old = self.Nws[self.curr_it - self.params.A]
                 self.n.append(N_new/N_old)
                 self.S -= self.params.c / (self.params.A * self.params.dt) * np.log(N_new / N_old)
 
@@ -153,6 +154,7 @@ class Propagator(System):
                                 self.H[i,j], self.H[j,i] = elem[:2]
                                 self.overlap[i,j], self.overlap[j,i] = elem[2:]
 
+                        #multiplying with np.exp(-self.S) has somewhat stabilizing character
                         spawning_probs = [
                             self.params.dt * (self.H[i,j] - self.S * self.overlap[i,j]) / p
                             for j,p in zip(set_js, pgens)
@@ -173,68 +175,18 @@ class Propagator(System):
                                         self.pgen[i, j] = p
                         
                 #Annihilation
-                self.coeffs[self.curr_it+1, :] = sp_coeffs
-                self.coeffs[self.curr_it+1, :] += self.coeffs[self.curr_it, :]
+                #self.coeffs[self.curr_it+1, :] = sp_coeffs
+                #1+self.S
+                
+                coeff_tmp = np.round((1+self.S) * self.coeffs[self.curr_it, :])
+                coeff_tmp = coeff_tmp + sp_coeffs
+                self.coeffs[self.curr_it+1, :] = coeff_tmp
 
                 if self.params.verbosity:
                         print(f'{self.curr_it}. Nw & S:      ',
                             np.linalg.norm(self.coeffs[self.curr_it+1, :], ord=1),
                             self.S
                         )
-
-        def heatbath_localized(self, i, size) -> np.ndarray:
-                r""""""
-                if size == 0:
-                        return np.array([]), np.array([])
-                overlap = np.zeros(self.params.dim)
-                H = np.zeros_like(overlap)
-
-                key = self.index_map_rev[i]
-                det = self.generate_det(key)
-
-                #get indices of occupied MOs
-                indices = np.array([np.arange(n) for n in excited_det.n_electrons], dtype=object)
-                for i, spin in enumerate(indices):
-                        spin[list(key[1][i])] = list(key[2][i])
- 
-                #retrieve their fragment occupation
-                old_ijk = [[(key[0], j, k) for k in spin] for j, spin in enumerate(indices)] 
-                frags = [[self.fragmap_inv[o] for o in spin] for spin in old_ijk]
-                #this will give a rule on how to generate "connected determinants" from connected MOs
-                # -> (1,3) (2,1) (3,2) (4,2) 
-                sample_rule = [np.unique(spin, return_counts=True) for spin in frags]
-
-                connected_exstr = []
-                for scf in range(self.params.nr_scf):
-                        for s, spin in enumerate(sample_rule):
-                                for (frag_i, n_i) in spin:
-                                        continue
-                                        #mos_on_frag = self.fragmap[]
-                                        
-                                        if len(self.frag_map[scf][s][frag_i]) == n_i -1:
-                                                pass
-                                                #excite
-
-                                        #for all scf sols check whether there are n_i electrons that can be attributed to n_frag fragments
-                                        if not len(self.frag_map[scf][s][frag_i]) >= n_i:
-                                               break #break to next scf
-
-                                        #if n_frag >= n_i generate all possible combinations of 
-                                        #store all in a list of ex_str
-
-
-                                connected_exstr.append()
-
-
-                js = [self.index_map[ex] for ex in connected_exstr]
-                #make array with self.H[i, js]
-                Tij = np.abs(self.H[i,js] - self.S * self.overlap[i,js])
-                pgen = Tij / np.einsum('i->', Tij)
-                
-                sample = np.random.choice(js, p=pgen, replace=True, size=size)
-                ps = pgen[[np.where(s==j)[0][0] for s in sample]]
-
-                return sample, ps
 
         def run(self) -> None:
                 r"""Executes the FCIQMC algorithm.
@@ -249,7 +201,38 @@ class Propagator(System):
                 for i in range(self.params.it_nr):
                         #Only measure Number of Walkers outside of ker(S)
                         self.Nw()
-                        
+        
+       #                 NORMALIZATION = i%self.params.A == 0 and i < self.params.delay/2
+       #                 if NORMALIZATION:
+       #                         coeff = self.coeffs[self.curr_it, :].copy()
+       #                         coeff = coeff / np.linalg.norm(coeff, ord = 2)
+       #                         currl1 = np.linalg.norm(coeff, ord = 1)
+       #                         coeff *= self.params.nr_w
+       #                         coeff /= currl1
+       #                         coeff = np.round(coeff)
+       #                         self.coeffs[self.curr_it, :] = coeff
+
+#                        PROJECT = i%200 == 0 and i > 7000 and i < 7300
+#                        if PROJECT:
+#                                avg1 = np.mean(self.coeffs[i-450:i-400, :], axis=0)
+#                                avg2 = np.mean(self.coeffs[i-50:i, :], axis=0)
+#                                ideallynull = avg2-avg1
+#                                print(np.einsum('ij,j->i', self.H, ideallynull))
+#                                ideallynull /= np.linalg.norm(ideallynull, ord=2)
+#                                projection = np.einsum('i,j->ij', ideallynull, ideallynull)
+#                                print(projection)
+ #                               #exit()
+#
+#                                coeff = self.coeffs[self.curr_it, :].copy()                                
+#                                coeff = np.einsum('ij,j->i', np.eye(self.params.dim) - projection, coeff)
+#                               # coeff = np.einsum('ij,j->i', projection, coeff)
+#                                if np.sign(coeff[0]) != np.sign(self.coeffs[i, 0]):
+#                                        coeff *= -1
+#                                #coeff /= np.linalg.norm(coeff, ord = 1)
+#                                #coeff *= self.Nws[i]
+#                                coeff = np.round(coeff)
+#                                self.coeffs[self.curr_it, :] = coeff
+
                         SHIFT_UPDATE = i%self.params.A == 0 and i > self.params.delay
                         if SHIFT_UPDATE: 
                                 self.Shift()

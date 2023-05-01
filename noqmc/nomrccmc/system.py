@@ -59,7 +59,8 @@ class System():
 		:param params: dictionary of time step, shift damping,
 			       walker number, delay, verbosity and 
 			       random seed"""
-                assert params.delay > params.A
+                #TODO put this in initialization of parameters
+                #assert params.delay > params.A
 
                 self.mol = mol
                 print(mol.ao_labels())
@@ -135,6 +136,7 @@ class System():
                         nr = int(self.params.nr_w / self.params.nr_scf)
                         E_HFs = E_HF(self.refs_scfobj)
 
+                        print('EHFS:    ', E_HFs)
                         for i, E in enumerate(E_HFs):
                                 self.initial[self.refdim * i] = nr
                                 noci_H[i,i] = E
@@ -197,7 +199,6 @@ class System():
 
                 #enumerate fragments
                 self.fragments = {i: list(frag) for i, frag in enumerate(fragments)}
-                print(self.fragments)
 
                 #assign each fragment, identified by its number, a set of MOs
                 self.fragmap = [[{i: [] for i in self.fragments} for _ in range(2)] for _ in range(self.params.nr_scf)]
@@ -205,7 +206,6 @@ class System():
 
                 for i, scf in enumerate(self.reference):
                         for j, coeff_spin in enumerate(scf.coefficients):
-                                print(f'Ref {i}, spin {j}:        ', coeff_spin)
                                 for k, mo in enumerate(coeff_spin.T):
                                         #Each MO will be assigned to a fragment
 
@@ -216,18 +216,11 @@ class System():
                                         
                                         #create map between each MO, identified by SCF number, spin space & MO index and fragments
                                         self.fragmap_inv[(i,j,k)] = frag_index
-                                        if (i,j,k) == (0,1,4) or (i,j,k) == (1,1,4):
-                                                print('Mulliken:        ', partial_mulliken)
-                                                print('Max:             ', frag_index)
 
                                 #Remove empty fragments:
                                 for frag in list(self.fragmap[i][j].keys()):
-                                        #print(self.fragmap[i][j])
                                         if self.fragmap[i][j][frag] == []:
                                                 del self.fragmap[i][j][frag]
-                print(self.fragments)
-                print(self.fragmap)
-                print('INVERSE: ', self.fragmap_inv)
         
         def generate_det(self, ex_str: str) -> SingleDeterminant:
                 r"""Generates Determinant at index i. Here, we only 
@@ -291,7 +284,6 @@ class System():
                 self.refdim = self.params.dim // self.params.nr_scf
 
                 borders = np.arange(self.params.nr_scf+1, dtype=int) * self.refdim
-                #borders = [i*self.refdim for i in range(self.params.nr_scf+1)]
                 self.scf_spaces = [range(borders[i], borders[i+1]) 
                                    for i in range(self.params.nr_scf)]
 
@@ -393,37 +385,37 @@ class System():
                 corresponding to eigenvalue 0 and diagonalize the Hamiltonian with
                 this new positive definite overlap matrix."""
                 isnan = np.isnan(self.H)
-                if any(isnan.flatten()):
-                        indices = np.where(isnan)
+                if not any(isnan.flatten()):
+                        return None
                         
-                        pool = multiprocessing.Pool(
-                            processes = multiprocessing.cpu_count(), 
-                            initializer = mute
+                indices = np.where(isnan)
+                        
+                pool = multiprocessing.Pool(
+                    processes=multiprocessing.cpu_count(), 
+                    initializer=mute
+                )
+                processes = {}
+                for i,j in zip(indices[0], indices[1]):
+                        #if i > j: continue
+                        det_i = self.get_det(i)
+                        det_j = self.get_det(j)
+                        occ_i = det_i.occupied_coefficients
+                        occ_j = det_j.occupied_coefficients
+
+                        processes[(i,j)] = pool.apply_async(
+                                calc_mat_elem, 
+                                [occ_i, occ_j, self.cbs, self.enuc, self.sao, self.hcore, self.E_ref]
                         )
-                        processes = {}
-                        for i,j in zip(indices[0], indices[1]):
-#                                if i > j: continue
-                                det_i = self.get_det(i)
-                                det_j = self.get_det(j)
-                                occ_i = det_i.occupied_coefficients
-                                occ_j = det_j.occupied_coefficients
 
-                                processes[(i,j)] = pool.apply_async(
-                                    calc_mat_elem, 
-                                    [occ_i, occ_j, self.cbs, self.enuc, self.sao, self.hcore, self.E_ref]
-                                )
-
-                        pool.close()
-                        pool.join()
-                        for i,j in zip(indices[0], indices[1]):
-#                                if i > j: continue
-                                processes[(i,j)] = processes[(i,j)].get()
-                                self.H[i,j] = processes[(i,j)][0]
-                                self.H[j,i] = processes[(i,j)][1]
-                                self.overlap[i,j] = processes[(i,j)][2]
-                                self.overlap[j,i] = processes[(i,j)][3]
-
-       
+                pool.close()
+                pool.join()
+                for i,j in zip(indices[0], indices[1]):
+                        #if i > j: continue
+                        processes[(i,j)] = processes[(i,j)].get()
+                        self.H[i,j] = processes[(i,j)][0]
+                        self.H[j,i] = processes[(i,j)][1]                                
+                        self.overlap[i,j] = processes[(i,j)][2]
+                        self.overlap[j,i] = processes[(i,j)][3]
 
 
 def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet, 

@@ -141,7 +141,7 @@ class LocalHeatBathGenerator(HeatBathGenerator, OrthogonalGenerator):
                 #this currently only sets allowed to one where frags have same occupation
                 assert((self.allowed == self.allowed.T).all())
                 
-                self.allowed = np.kron(np.ones((2,2), dtype=int), self.allowed[:118,:118])
+                #self.allowed = np.kron(np.ones((2,2), dtype=int), self.allowed[:118,:118])
                 
                 np.save('allowed_init.npy', self.allowed)
 
@@ -169,31 +169,9 @@ class LocalHeatBathGenerator(HeatBathGenerator, OrthogonalGenerator):
                                         if new_ex_str in self.index_map:
                                                 k = self.index_map[new_ex_str]
                                                 self.allowed[i,k] = 1
-                                                print(i,k)
-#                                nr_scf = ex_str[0]
-#                                n_e = excited_det.n_electrons
-#                                occs_a = indices[0][:n_e[0]]          
-#                                occs_b = indices[1][:n_e[1]]
-#                                virs_a = indices[0][n_e[0]:] 
-#                                virs_b= indices[1][n_e[1]:]
-                                
-                                #now generate ex_strs
-#                                for level in np.arange(0, 3): #only considers double excitations
-#                                        for n_alpha in range(level+1):
-#                                                n_beta = int(level - n_alpha)
-#                                                if n_alpha > n_e[0] or n_beta > n_e[1]: continue
-#                                                for occ_a in combinations(occs_a, n_alpha):
-#                                                        for occ_b in combinations(occs_b, n_beta):
-#                                                                for vir_a in combinations(virs_a, n_alpha):
-#                                                                        for vir_b in combinations(virs_b, n_beta):
-#                                                                        
-#                                                                                ex_tup = (nr_scf, (occ_a, occ_b), (vir_a,vir_b))
-                #                                                                print(ex_tup)
-#                                                                                if ex_tup in self.index_map:
-#                                                                                        k = self.index_map[ex_tup]
-#                                                                                        self.allowed[i,k] = 1
+                                                
+
                 self.allowed += self.allowed.T
-                #self.allowed = np.ones((87,87))
                 np.save('allowed.npy', self.allowed)
 
         def swap_mos(self, indices, ex_str):
@@ -221,10 +199,11 @@ class LocalHeatBathGenerator(HeatBathGenerator, OrthogonalGenerator):
                         occ = set(spin[:n_e])
                         ref = set(range(n_e))
                         diff = np.array(list(occ.symmetric_difference(ref)))
+                        
+                        #sort it and slice in bits of occ and virt indices
                         diff = np.sort(diff)
                         occs_tot.append(tuple(diff[np.where(diff < n_e)[0]]))
                         virt_tot.append(tuple(diff[np.where(diff >= n_e)[0]]))
-                        #sort it and slice in bits of occ and virt indices
                         
                 new_ex_str = (scf, (occs_tot[0], occs_tot[1]), (virt_tot[0], virt_tot[1]) )
                 return new_ex_str
