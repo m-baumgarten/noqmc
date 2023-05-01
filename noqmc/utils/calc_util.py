@@ -107,7 +107,6 @@ def generate_scf(mol, scf_sols, init_guess_rhf=None, init_guess_uhf=None,
                 scf_solutions.append(rhf)
                 scf_solutions = [rhf] * scf_sols[0]
 
-
         #Generate UHF solutions
         if scf_sols[1] > 0:
                 uhf = scf.UHF(mol)

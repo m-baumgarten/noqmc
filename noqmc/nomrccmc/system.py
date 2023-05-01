@@ -206,6 +206,7 @@ class System():
 
                 for i, scf in enumerate(self.reference):
                         for j, coeff_spin in enumerate(scf.coefficients):
+                                print(f'Ref {i}, spin {j}:        ', coeff_spin)
                                 for k, mo in enumerate(coeff_spin.T):
                                         #Each MO will be assigned to a fragment
 
@@ -385,6 +386,7 @@ class System():
                 corresponding to eigenvalue 0 and diagonalize the Hamiltonian with
                 this new positive definite overlap matrix."""
                 isnan = np.isnan(self.H)
+<<<<<<< HEAD
                 if not any(isnan.flatten()):
                         return None
                         
