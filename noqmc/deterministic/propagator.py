@@ -29,11 +29,14 @@ class Propagator(System):
 #                self.initial = np.dot(self.overlap, self.initial) #NOTE
                 self.coeffs[0,:] = norm(self.initial.copy()) #* 3000
                 
-#                self.coeffs[0,:] = np.random.random(236)
-#                self.coeffs[0,:] /= np.linalg.norm(self.coeffs[0,:])
+                self.coeffs[0,:] = np.random.random(58)
+                self.coeffs[0,:] /= np.linalg.norm(self.coeffs[0,:])
                 
 
                 self.curr_it = 0
+
+                tmp = np.load('tmp.npy')
+                self.Hi = np.dot(tmp, self.H)
 
         def calculate_operators(self):
                 r"""Calculates the Hamiltonian and overlap"""        
@@ -42,7 +45,8 @@ class Propagator(System):
                 #self.propagator = self.overlap - self.params.dt * self.H
 
         def update_propagator(self, E):
-                self.propagator = np.eye(self.params.dim) - self.params.dt * (self.H - E*self.overlap)
+#                self.propagator = np.eye(self.params.dim) - self.params.dt * (self.H - E*self.overlap)
+                self.propagator = np.eye(self.params.dim) - self.params.dt * (self.Hi - E*np.eye(self.params.dim))
 
         def E(self) -> float:
                 r"""Calculates energy estimator at current iteration."""
@@ -67,8 +71,9 @@ class Propagator(System):
                 new = norm(new)
                 self.coeffs[self.curr_it+1, :] = new
 
+                ev, _ = np.linalg.eigh(self.propagator)
                 print(f'{self.curr_it} E_proj:      ', 
-                    self.E_proj[self.curr_it] 
+                    self.E_proj[self.curr_it], ev[-1] 
                 )
 
         def run(self) -> None:
@@ -78,6 +83,7 @@ class Propagator(System):
                 for i in range(self.params.it_nr):
                         self.curr_it = i
                         self.population_dynamics()
+
 
 if __name__ == '__main__':      
         pass
