@@ -212,6 +212,9 @@ def eigh_overcomplete_noci(H, overlap, ov_eigval, ov_eigvec, loc_th=5e-06
             'ij,jk,kl->il', projector_mat.T, H, projector_mat
         )
 
+        TMP = np.einsum('ij,jk,kl->il', projector_mat, np.linalg.inv(projected_ov), projector_mat.T)
+        np.save('tmp.npy', TMP)
+
         PRECISION = int(-np.log10(ZERO_TOLERANCE))-4
         eigvals, eigvecs = la.eigh(
             projected_ham,

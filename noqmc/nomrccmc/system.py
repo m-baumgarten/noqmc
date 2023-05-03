@@ -386,7 +386,6 @@ class System():
                 corresponding to eigenvalue 0 and diagonalize the Hamiltonian with
                 this new positive definite overlap matrix."""
                 isnan = np.isnan(self.H)
-<<<<<<< HEAD
                 if not any(isnan.flatten()):
                         return None
                         

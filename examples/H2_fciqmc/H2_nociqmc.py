@@ -23,20 +23,20 @@ if __name__ == '__main__':
         guess_rhf, guess_uhf = get_init_guess_H2(r)
 
         params = { 
-                'mode': 'noci',
+                'mode': 'ref',
                 'verbosity': 1,
                 'seed': 69420,
-                'dt': 0.01,
+                'dt': 0.03,
                 'nr_w': 2000,
                 'A': 10, 
                 'c': 0.05,
-                'it_nr': 5000,
-                'delay': 500,
+                'it_nr': 2000,
+                'delay': 200,
                 'theory_level': 2,
                 'benchmark': 1,
                 'localization': 0,
-                'scf_sols': [1,1,0],
-                'sampling': 'uniform',
+                'scf_sols': [1,1,1],
+                'sampling': 'heatbath',
                 'binning': 1,
                 'baseS': 'hf'
         }

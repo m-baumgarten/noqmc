@@ -209,7 +209,7 @@ class Postprocessor(Propagator):
 
                 null_proj = np.einsum('ij,jk->ik', self.get_subspace(0.), self.get_subspace(0.).T)
                 self.nullspace_evol = np.einsum('ij,kj->ki', null_proj, self.coeffs)
-               
+
                 #Selection of ground state from degenerate eigenvectors
                 if benchmark:
                         self.degeneracy_treatment()

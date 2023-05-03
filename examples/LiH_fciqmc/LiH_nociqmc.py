@@ -53,20 +53,20 @@ if __name__ == '__main__':
         guess_rhf, guess_uhf = get_init_guess_LiH(r=r)
 
         params = { 
-                'mode': 'noci',
+                'mode': 'ref',
                 'verbosity': 1,
                 'seed': 69420,
-                'dt': 0.01,
-                'nr_w': 1000,
+                'dt': 0.15,
+                'nr_w': 3000,
                 'A': 12, 
                 'c': 0.04,
-                'it_nr': 4000,
+                'it_nr': 2500,
                 'delay': 1000,
-                'theory_level': 1,
+                'theory_level': 2,
                 'benchmark': 1,
-                'localization': 1,
-                'scf_sols': [1,1,1],
-                'sampling': 'localheatbath',
+                'localization': 0,
+                'scf_sols': [0,1,1],
+                'sampling': 'heatbath',
                 'binning': 1,
         }
 
