@@ -31,18 +31,26 @@ class Propagator(System):
                 
                 self.coeffs[0,:] = np.random.random(58)
                 self.coeffs[0,:] /= np.linalg.norm(self.coeffs[0,:])
-                
+                                
 
                 self.curr_it = 0
 
-                tmp = np.load('tmp.npy')
-                self.Hi = np.dot(tmp, self.H)
+               # tmp = np.load('tmp.npy')
+               # self.Hi = np.dot(tmp, self.H)
 
         def calculate_operators(self):
                 r"""Calculates the Hamiltonian and overlap"""        
                 self._calculatematrices()
-                self.propagator = np.eye(self.params.dim) - self.params.dt * self.H
+                #self.propagator = np.eye(self.params.dim) - self.params.dt * self.H
+
                 #self.propagator = self.overlap - self.params.dt * self.H
+                vals, vecs = np.linalg.eigh(self.overlap)
+                proj = vecs[:, np.where(vals > 1e-08)[0]]
+                proj_overlap = np.einsum('ij,jk,kl->il', proj.T, self.overlap, proj)
+                inv_overlap = np.linalg.inv(proj_overlap)
+                proj_inv_overlap = np.einsum('ij,jk,kl->il', proj, inv_overlap, proj.T)
+
+                self.Hi = np.dot(proj_inv_overlap, self.H)
 
         def update_propagator(self, E):
 #                self.propagator = np.eye(self.params.dim) - self.params.dt * (self.H - E*self.overlap)
