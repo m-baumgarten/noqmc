@@ -1,7 +1,7 @@
 import logging
 import os
 import numpy as np
-
+from dataclasses import asdict
 from pyscf.gto import Mole
 from pyscf import gto
 
@@ -28,30 +28,26 @@ class NOCCMC(Propagator):
         blocking analysis on it."""
         def __init__(self, mol: Mole, params: Parameters=None, **kwargs):
                 if params is not None:
+                        default_params = DEFAULT_CCMC_ARGS
                         if isinstance(params, Parameters):
-                                params = params
+                                default_params.update(asdict(params))
+                                params = default_params
                         
                         elif isinstance(params, dict):
-                                params_new = Parameters()
-                                for key, val in params.items():
-                                        setattr(params_new, key, val)
-                                params = params_new
+                                default_params.update(params)
+                                params = default_params
 
-                        elif isinstance(params, str):
+                        elif isinstance(params, str):                                
                                 params = Parser().parse(params)
+                                default_params.update(asdict(params))
+                                params = default_params
 
                 else: params = DEFAULT_CCMC_ARGS 
-               
-                for key, val in kwargs.items():
-                        setattr(params, key, val)
+              
+                params.update(kwargs)
 
-                if params.workdir is None: params.workdir = 'output'
                 setup_workdir(params.workdir)
               
-                if params.scf_sols is None:
-                        params.scf_sols = [1,1,1]
-                params.nr_scf = sum(params.scf_sols)
-
                 self.params = params                
                 self.initialize_log()
                 self.mol = mol

@@ -11,32 +11,55 @@ logger.setLevel(logging.INFO)
 @dataclass
 class Parameters:
         r"""Dataclass to store system parameters."""
-        mode: str = None
-        verbosity: int = None
-        seed: int = None
-        dt: float = None
-        nr_w: int = None
-        A: int = None
-        c: float = None
-        it_nr: int = None
-        delay: int = None
-        theory_level: int = None
-        benchmark: int = None
-        localization: int = None
-        scf_sols: list = None
-        sampling: str = None
-        binning: int = None
-        dim: int = None
-        nr_scf: int = None
-        workdir: str = None
-        baseS: str = None
+        mode: str=None
+        verbosity: int=None
+        seed: int=None
+        dt: float=None
+        nr_w: int=None
+        A: int=None
+        c: float=None
+        it_nr: int=None
+        delay: int=None
+        theory_level: int=None
+        benchmark: int=None
+        localization: int=None
+        scf_sols: list=None
+        sampling: str=None
+        binning: int=None
+        dim: int=None
+        nr_scf: int=None
+        workdir: str=None
+        baseS: str=None
+
+        def __post_init__(self):
+                r"""Rudimentary input validation.""" 
+                for field in fields(self):
+                        name = field.name
+                        reqtype = field.type
+                        value = getattr(self, name)
+                        if name == 'nr_scf':
+                                if value is None:
+                                        if getattr(self, 'scf_sols') is None: continue
+                                        setattr(self, name, sum(getattr(self, 'scf_sols')))
+                                else:
+                                        assert(value == sum(getattr(self, 'scf_sols')))
+                        if not isinstance(value, reqtype):       
+                                if value is None: continue
+                                raise TypeError
+
+        def update(self, update_dict):
+                r"""Update Parameters with a dictionary."""
+                for key, value in update_dict.items():
+                        if hasattr(self, key):
+                                setattr(self, key, value)
+
 
 @dataclass
 class Thresholds:
         r"""Collection of thresholds used throughout the iteration."""
-        ov_zero_thresh: float = None
-        rounding: float = None
-        subspace: float = None
+        ov_zero_thresh: float=None
+        rounding: float=None
+        subspace: float=None
 
 class Parser():
         r"""Crude Input parser, reading arguments for a nomrci-qmc

@@ -17,7 +17,13 @@ DEFAULT_CCMC_ARGS = Parameters(
     delay=20000,
     theory_level=1,
     benchmark=1,
-    sampling='uniform'
+    sampling='uniform',
+    localization=0,
+    scf_sols=[1,1,1],
+    binning=0,
+    nr_scf=3,
+    baseS='noci',
+    workdir='output',
 )
 
 DEFAULT_CIQMC_ARGS = Parameters(
@@ -32,7 +38,13 @@ DEFAULT_CIQMC_ARGS = Parameters(
     delay=20000,
     theory_level=1,
     benchmark=1,
-    sampling='uniform'
+    sampling='uniform',
+    localization=0,
+    scf_sols=[1,1,1],
+    binning=0,
+    nr_scf=3,
+    baseS='noci',
+    workdir='output',
 )
 
 DEFAULT_DETERMINISTIC_ARGS = Parameters(
@@ -46,7 +58,9 @@ DEFAULT_DETERMINISTIC_ARGS = Parameters(
     benchmark=1,
     localization=0,
     scf_sols=[2,0,0],
-    sampling='uniform'
+    sampling='uniform',
+    workdir='output',
+    nr_scf=2,
 )
 
 THRESHOLDS = Thresholds(
