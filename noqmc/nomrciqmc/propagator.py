@@ -55,17 +55,17 @@ class Propagator(System):
 
                 self.coeffs = np.zeros([self.params.it_nr+1, self.params.dim], dtype = int)
                 self.coeffs[0,:] = self.initial.copy()
-                print('coeff:   ', self.coeffs[0,:])
 
                 self.E_proj = np.empty(self.params.it_nr)
                 self.Ss = np.empty(self.params.it_nr)
                 self.S = 0.
 
+                self.Snew = np.empty(self.params.it_nr)
+                self.Sn = 0.
+
         def setupgenerator(self):
                 r""""""
                 sample = self.params.sampling
-                #print(np.where(np.isnan(self.H)))
-                #exit()
                 if sample == 'uniform':
                         self.generator = excite.UniformGenerator(self.params)
                 elif sample == 'heatbath':
@@ -101,12 +101,17 @@ class Propagator(System):
                 :param A: Interval of reevaluation of S
 		:param c: Empirical daming parameter c
 		"""
-#                N_new = self.Nw_ov[self.curr_it]
-#                N_old = self.Nw_ov[self.curr_it - self.params.A]
-                N_new = self.Nws[self.curr_it]
-                N_old = self.Nws[self.curr_it - self.params.A]
+                N_new = self.Nw_ov[self.curr_it]
+                N_old = self.Nw_ov[self.curr_it - self.params.A]
+
+                        #this is N2_new ...
+                N2_new = self.Nws[self.curr_it]
+                N2_old = self.Nws[self.curr_it - self.params.A]
+
                 self.n.append(N_new/N_old)
                 self.S -= self.params.c / (self.params.A * self.params.dt) * np.log(N_new / N_old)
+
+                self.Sn -= self.params.c / (self.params.A * self.params.dt) * np.log(N2_new / N2_old)
 
         def Nw(self) -> None:
                 r"""Updates total number of walkers resident outside 
@@ -168,7 +173,7 @@ class Propagator(System):
                                 sp_coeffs[j] -= sign_coeff * s_int
 
                                 if self.params.binning:
-                                        self.bin[i, j] -= sign_coeff * s_int
+                                        self.bin[i, j] += np.abs(s_int)
                                         
                         if self.params.binning:
                                 for j,p in zip(set_js, pgens):
@@ -177,15 +182,15 @@ class Propagator(System):
                 #Annihilation
                 #self.coeffs[self.curr_it+1, :] = sp_coeffs
                 #1+self.S
-                
-                coeff_tmp = np.round((1+self.S) * self.coeffs[self.curr_it, :])
+                #(1+self.Sn)*                
+                coeff_tmp = np.round(self.coeffs[self.curr_it, :])
                 coeff_tmp = coeff_tmp + sp_coeffs
                 self.coeffs[self.curr_it+1, :] = coeff_tmp
 
-                if self.params.verbosity:
+                if self.params.verbosity and self.curr_it%20==0:
                         print(f'{self.curr_it}. Nw & S:      ',
                             np.linalg.norm(self.coeffs[self.curr_it+1, :], ord=1),
-                            self.S
+                            self.S, self.Sn
                         )
 
         def run(self) -> None:
@@ -237,12 +242,14 @@ class Propagator(System):
                         if SHIFT_UPDATE: 
                                 self.Shift()
                         self.Ss[i] = self.S
+                        self.Snew[i] = self.Sn
                         self.E()
 
                         self.population_dynamics()
                         
                         self.curr_it += 1
-
+                        
+                        np.save('Snew.npy', self.Snew)
 
                 if self.params.binning:
                         np.save(os.path.join(self.params.workdir,'bin.npy'), self.bin)
