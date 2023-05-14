@@ -16,18 +16,20 @@ def get_init_guess_H2(r: float):
 
 if __name__ == '__main__':
         
-        r = 1.8
+        r = 3.8
         mol = gto.M(atom=[["H", 0., 0., 0.],["H", 0., 0., r ]], 
                     basis='sto-3g', verbose=0, unit='Angstrom'
         )   
         guess_rhf, guess_uhf = get_init_guess_H2(r)
+        print(guess_rhf, guess_uhf)
+        exit()
 
         params = { 
                 'mode': 'ref',
                 'verbosity': 1,
                 'seed': 69420,
                 'dt': 0.03,
-                'nr_w': 2000,
+                'nr_w': 4000,
                 'A': 10, 
                 'c': 0.05,
                 'it_nr': 2000,
@@ -38,7 +40,7 @@ if __name__ == '__main__':
                 'scf_sols': [1,1,1],
                 'sampling': 'heatbath',
                 'binning': 1,
-                'baseS': 'hf'
+                'baseS': 'noci'
         }
 
 
@@ -47,9 +49,7 @@ if __name__ == '__main__':
                 guess_rhf=guess_rhf, guess_uhf=guess_uhf
         )
         my_prop = my_nociqmc.run()
- #       print(my_prop.E_NOCI)
         my_nociqmc.get_data()
-#        print(my_nociqmc.__dict__)
 
         my_nociqmc.plot()
 
