@@ -73,7 +73,8 @@ class Propagator(System):
 
         def E(self) -> None:
                 r"""Calculates energy estimator at current iteration."""
-                
+               
+
                 coeffs = self.coeffs[self.curr_it,:]
                 coeffs_ref = coeffs[self.ref_indices]
                 overlap_tmp = np.nan_to_num(self.overlap)
@@ -83,8 +84,15 @@ class Propagator(System):
                         np.abs(coeffs_ref) == np.max(np.abs(coeffs_ref))
                 )[0][0] #get index of maximum value 
                 index = self.ref_indices[index]
-                E_proj = np.einsum('i,i->', H_tmp[index,:], coeffs)
-                E_proj /= np.einsum('i,i->', overlap_tmp[index, :], coeffs)
+                
+                tH, tS = [], []
+                for keys, val in self.H_dict.items():
+                        if keys[1] != index: continue
+                        tH.append(val[0]*val[2]), 
+                        tS.append(val[1]*val[2])
+
+                E_proj = np.einsum('i,i->', H_tmp[index,:], coeffs) + sum(tH) 
+                E_proj /= (np.einsum('i,i->', overlap_tmp[index, :], coeffs) + sum(tS))
                 self.E_proj[self.curr_it+1] = E_proj
 
         def Shift(self) -> None:
@@ -155,7 +163,6 @@ class Propagator(System):
                 if len(cluster.excitation[1][0] + cluster.excitation[1][1]) <= self.params.theory_level:
                         ii = self.index_map[cluster.excitation]
 
-                #if ii is not None:
                         if np.isnan(self.H[ii,j]):
                                 det_i = self.generate_det(cluster.excitation)
                                 occ_i = det_i.occupied_coefficients
@@ -186,9 +193,9 @@ class Propagator(System):
                                     enuc=self.enuc, sao=self.sao, 
                                     hcore=self.hcore, E_ref=self.E_ref
                                 )
-                                self.H_dict[(cl_nr, j)] = (H_ij, overlap_ij)
+                                self.H_dict[(cl_nr, j)] = (H_ij, overlap_ij, cluster.amplitude)
                         else:
-                                H_ij, overlap_ij = self.H_dict[(cl_nr, j)]
+                                H_ij, overlap_ij, _ = self.H_dict[(cl_nr, j)]
                 return H_ij, overlap_ij
                 
 
@@ -240,12 +247,14 @@ class Propagator(System):
                 for p in p_dens_scf:
                         p[-1] *= 2
                 
+                #slice this TODO
                 N0_scf = np.array([c[0] for c in coeffs_scf])
                 nr_excips_compl = np.array(
                     [n-N for n,N in zip(nr_excips_scf, np.abs(N0_scf))]
                 )
                 #TODO no need to get p_coeff_scf, normalization of p_interm can be done with nr_excips_compl
 
+                #TODO should this be self.refdim?
                 p_excit = 1/self.params.dim
 
                 #iterate over SCF sol. -> this way we pick determiants 
@@ -310,9 +319,11 @@ class Propagator(System):
                 self.coeffs[self.curr_it+1, :] = sp_coeffs
                 self.coeffs[self.curr_it+1, :] += coeffs
 
-                print(f'{self.curr_it}. Shift and Nr_w:        ', self.S, 
-                        np.linalg.norm(self.coeffs[self.curr_it+1, :] ,ord = 1)
-                )
+                w = np.linalg.norm(self.coeffs[self.curr_it+1, :] ,ord = 1)
+                if w > 15000:
+                        raise ValueError
+
+                print(f'{self.curr_it}. Shift and Nr_w: ', self.S, w)
 
         def run(self) -> None:
                 r"""Executes the population dynamics algorithm."""
