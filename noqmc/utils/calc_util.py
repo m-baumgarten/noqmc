@@ -212,8 +212,6 @@ def eigh_overcomplete_noci(H, overlap, ov_eigval, ov_eigvec, loc_th=5e-06
             'ij,jk,kl->il', projector_mat.T, H, projector_mat
         )
 
-        TMP = np.einsum('ij,jk,kl->il', projector_mat, np.linalg.inv(projected_ov), projector_mat.T)
-        np.save('tmp.npy', TMP)
 
         PRECISION = int(-np.log10(ZERO_TOLERANCE))-4
         eigvals, eigvecs = la.eigh(
@@ -221,6 +219,8 @@ def eigh_overcomplete_noci(H, overlap, ov_eigval, ov_eigvec, loc_th=5e-06
             b=np.round(projected_ov, PRECISION),
             type=1
         )
+
+        np.save('inv_overlap.npy', np.einsum('ij,jk,kl',np.linalg.inv(eigvecs), projected_ov, eigvecs))
 
         #Project back into the whole, overcomplete space whereas now the
         #eigenvectors do not have any components in the null space.

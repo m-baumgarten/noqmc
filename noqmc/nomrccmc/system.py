@@ -122,7 +122,7 @@ class System():
                                                               E_ref=0)
                                         noci_H[i,j], noci_H[j,i] = elems[:2]
                                         noci_overlap[i,j], noci_overlap[j,i] = elems[2:]
-                        
+                       
                         noci_ov_eigval, noci_ov_eigvec = la.eigh(noci_overlap)
                         self.noci_eigvals, self.noci_eigvecs, _ = eigh_overcomplete_noci(noci_H, noci_overlap, noci_ov_eigval, noci_ov_eigvec)
                         self.E_NOCI = self.noci_eigvals[0]
@@ -160,7 +160,6 @@ class System():
                         self.E_ref = self.E_NOCI
                 else:
                         raise NotImplementedError 
-                
 
         def update_matrices(self, noci_H, noci_overlap) -> None:
                 r"""After set_Eref"""
@@ -418,6 +417,8 @@ class System():
                         self.overlap[i,j] = processes[(i,j)][2]
                         self.overlap[j,i] = processes[(i,j)][3]
 
+                np.save(os.path.join(self.params.workdir, 'overlap.npy'), self.overlap)
+                np.save(os.path.join(self.params.workdir, 'overlap.npy'), self.H)
 
 def calc_mat_elem(occ_i: np.ndarray, occ_j: int, cbs: ConvolvedBasisSet, 
                   enuc: float, sao: np.ndarray, hcore: float, E_ref: float, 

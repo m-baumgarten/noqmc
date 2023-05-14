@@ -53,12 +53,10 @@ class Postprocessor(Propagator):
                 
                 self._calculatematrices()
 
-                np.save(os.path.join(self.params.workdir, 'overlap.npy'), self.overlap)
-                np.save(os.path.join(self.params.workdir, 'Hamiltonian.npy') , self.H)
-
                 self.ov_eigval ,self.ov_eigvec = la.eigh(self.overlap)
                 self.eigvals, self.eigvecs, projector_mat = eigh_overcomplete_noci(self.H, self.overlap, self.ov_eigval, self.ov_eigvec)
                 self.projector1 = np.einsum('ij,jk->ik', projector_mat, projector_mat.T)
+                np.save('eigvecs.npy', self.eigvecs)
 
         def gs_degenerate(self) -> Sequence[int]:
                 r"""Returns a sequence of indices, corresponing to the 

@@ -21,11 +21,9 @@ if __name__ == '__main__':
                     basis='sto-3g', verbose=0, unit='Angstrom'
         )   
         guess_rhf, guess_uhf = get_init_guess_H2(r)
-        print(guess_rhf, guess_uhf)
-        exit()
 
         params = { 
-                'mode': 'ref',
+                'mode': 'noci',
                 'verbosity': 1,
                 'seed': 69420,
                 'dt': 0.03,

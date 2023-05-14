@@ -43,6 +43,9 @@ class Parameters:
                                         setattr(self, name, sum(getattr(self, 'scf_sols')))
                                 else:
                                         assert(value == sum(getattr(self, 'scf_sols')))
+                        if name == 'scf_sols':
+                                if value is not None:
+                                        setattr(self, 'nr_scf', sum(value))
                         if not isinstance(value, reqtype):       
                                 if value is None: continue
                                 raise TypeError
@@ -52,7 +55,7 @@ class Parameters:
                 for key, value in update_dict.items():
                         if hasattr(self, key):
                                 setattr(self, key, value)
-
+                self.__post_init__()
 
 @dataclass
 class Thresholds:

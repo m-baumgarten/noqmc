@@ -18,7 +18,8 @@ SUPPORTED_DATA = [
         'Nws',
         'nullspace_evol',
         'coeffs_ad',
-        'coeffs_det_no0'
+        'coeffs_det_no0',
+        'Snew'
 ]
 
 
@@ -61,6 +62,9 @@ class Plot():
         def plot_energy(self, ax) -> None:
                 params = self.params
                 x_axis = np.arange(params.it_nr) * params.dt
+                if len(x_axis)!= len(self.data['E_proj']):
+                        self.data['E_proj'] = self.data['E_proj'][:-1]
+                        self.data['Ss'] = self.data['Ss'][:-1]
 
                 ax.plot(x_axis, self.data['E_proj'], label=r'$E(\tau)$')
                 if 'Ss' in self.data:
