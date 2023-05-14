@@ -103,9 +103,9 @@ class NOCCMC(Propagator):
 
                 dataS = self.statS.data_summary[self.statS.block]
                 dataE = self.statE.data_summary[self.statE.block]
-                final_vals = np.array([dataS.mean, dataS.std_err,
+                self.final_vals = np.array([self.E_ref, dataS.mean, dataS.std_err,
                                        dataE.mean, dataE.std_err])
-                np.save('final_vals.npy', final_vals)
+                np.save('final_vals.npy', self.final_vals)
 
         def plot(self) -> None:
                 from noqmc.utils.plot import Plot
